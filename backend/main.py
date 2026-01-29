@@ -44,9 +44,25 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int, 
     if not staff:
         raise HTTPException(status_code=404, detail=f"Staff '{staff_name}' not found")
     
+    target_date = pd.to_datetime(date).date()
+    
+    # Check for existing absence for this staff member on this date
+    existing_absence = db.query(Absence).filter(
+        Absence.staff_id == staff.id,
+        Absence.date == target_date
+    ).first()
+    
+    if existing_absence:
+        # Update periods if they changed, or just return existing
+        existing_absence.start_period = start_period
+        existing_absence.end_period = end_period
+        db.commit()
+        db.refresh(existing_absence)
+        return existing_absence
+    
     new_absence = Absence(
         staff_id=staff.id,
-        date=pd.to_datetime(date).date(),
+        date=target_date,
         start_period=start_period,
         end_period=end_period
     )
