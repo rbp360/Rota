@@ -24,6 +24,7 @@ const App = () => {
   const [chatQuery, setChatQuery] = useState('');
   const [chatReport, setChatReport] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
+  const [absentSchedule, setAbsentSchedule] = useState([]);
 
 
   const API_URL = "http://127.0.0.1:8000";
@@ -120,6 +121,24 @@ const App = () => {
       setCoveredPeriods([]);
     }
   }, [currentAbsenceId]);
+
+  useEffect(() => {
+    const fetchAbsentSchedule = async () => {
+      if (!absentPerson) {
+        setAbsentSchedule([]);
+        return;
+      }
+      try {
+        const res = await axios.get(`${API_URL}/staff-schedule/${absentPerson}`, {
+          params: { day: selectedDay }
+        });
+        setAbsentSchedule(res.data);
+      } catch (err) {
+        console.error("Failed to fetch absent schedule:", err);
+      }
+    };
+    fetchAbsentSchedule();
+  }, [absentPerson, selectedDay]);
 
   // Helper to ensure an absence record exists in the DB
   const ensureAbsence = async () => {
@@ -218,7 +237,10 @@ const App = () => {
   };
 
   const selectAllDay = () => {
-    setPeriods([1, 2, 3, 4, 5, 6, 7, 8]);
+    const needCover = absentSchedule.length > 0
+      ? absentSchedule.filter(s => !s.is_free).map(s => s.period)
+      : [1, 2, 3, 4, 5, 6, 7, 8];
+    setPeriods(needCover);
   };
 
   const handleGenerateReport = async () => {
@@ -411,21 +433,30 @@ const App = () => {
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
                       const isCovered = coveredPeriods.includes(p);
                       const isSelected = periods.includes(p);
+                      const scheduleItem = absentSchedule.find(s => s.period === p);
+                      const isOriginallyFree = scheduleItem && scheduleItem.is_free;
+
                       return (
                         <button
                           key={p}
-                          onClick={() => handlePeriodClick(p)}
+                          onClick={() => !isOriginallyFree && handlePeriodClick(p)}
                           className="glass"
+                          disabled={isOriginallyFree}
+                          title={isOriginallyFree ? `No cover needed: ${scheduleItem.activity}` : `Period ${p}`}
                           style={{
                             padding: '0.4rem',
                             fontSize: '0.8rem',
-                            background: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent'),
-                            borderColor: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)'),
-                            color: (isCovered || isSelected) ? 'white' : 'var(--text-main)',
+                            background: isOriginallyFree ? 'rgba(0,0,0,0.05)' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent')),
+                            borderColor: isOriginallyFree ? 'transparent' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)')),
+                            color: isOriginallyFree ? 'var(--text-muted)' : ((isCovered || isSelected) ? 'white' : 'var(--text-main)'),
+                            cursor: isOriginallyFree ? 'not-allowed' : 'pointer',
+                            opacity: isOriginallyFree ? 0.6 : 1,
+                            textDecoration: isOriginallyFree ? 'line-through' : 'none',
                             transition: 'all 0.3s ease'
                           }}
                         >
-                          {isCovered ? <CheckCircle size={12} style={{ marginRight: '2px' }} /> : ''} P{p}
+                          {isCovered ? <CheckCircle size={12} style={{ marginRight: '2px' }} /> : ''}
+                          P{p}
                         </button>
                       );
                     })}

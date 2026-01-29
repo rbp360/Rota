@@ -84,7 +84,13 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
             raise HTTPException(status_code=404, detail="Absence not found")
         
         absent_staff = db.query(Staff).filter(Staff.id == absence.staff_id).first()
-        target_periods = list(range(absence.start_period, absence.end_period + 1))
+        
+        # Get the absent teacher's schedule for this day to see which periods actually need cover
+        absent_schedules = {sch.period: sch for sch in absent_staff.schedules if sch.day_of_week.lower() == day.lower()}
+        
+        # Only suggest cover for periods where the teacher is NOT free
+        all_range_periods = list(range(absence.start_period, absence.end_period + 1))
+        target_periods = [p for p in all_range_periods if p in absent_schedules and not absent_schedules[p].is_free]
         
         # Get all potential covering staff
         potential_staff = db.query(Staff).filter(Staff.is_active == True).all()
@@ -234,6 +240,24 @@ def assign_cover(absence_id: int, staff_name: str, periods: str, db: Session = D
 def get_covers(absence_id: int, db: Session = Depends(get_db)):
     covers = db.query(Cover).filter(Cover.absence_id == absence_id).all()
     return [{"period": c.period, "staff_name": c.covering_staff.name} for c in covers]
+
+@app.get("/staff-schedule/{staff_name}")
+def get_staff_schedule(staff_name: str, day: str = None, db: Session = Depends(get_db)):
+    staff = db.query(Staff).filter(func.lower(Staff.name) == staff_name.lower()).first()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    
+    query = db.query(Schedule).filter(Schedule.staff_id == staff.id)
+    if day:
+        query = query.filter(func.lower(Schedule.day_of_week) == day.lower())
+    
+    schedules = query.order_by(Schedule.period).all()
+    return [{
+        "period": s.period,
+        "day": s.day_of_week,
+        "activity": s.activity,
+        "is_free": s.is_free
+    } for s in schedules]
 
 @app.get("/daily-rota")
 def get_daily_rota(date: str, db: Session = Depends(get_db)):
