@@ -43,3 +43,30 @@ class RotaAI:
         except Exception as e:
             print(f"AI Generation Error: {e}")
             return f"Error: Failed to generate AI content. {str(e)}"
+
+    def generate_report(self, query, data_context):
+        if not os.getenv("GOOGLE_AI_KEY"):
+            return "Error: GOOGLE_AI_KEY not found in environment."
+
+        prompt = f"""
+        Internal School Rota AI Report Generator:
+        
+        You are an assistant for a school cover system. You have access to the following historical data:
+        
+        {data_context}
+        
+        User Query: {query}
+        
+        Goal: Provide a concise and accurate report based on the data provided. 
+        If a user asks for counts (e.g., "how many times..."), be specific.
+        If the data doesn't contain information to answer the query, say so politely.
+        
+        Output format: Concise, professional text or a small table if appropriate.
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"AI Report Generation Error: {e}")
+            return f"Error: Failed to generate report. {str(e)}"

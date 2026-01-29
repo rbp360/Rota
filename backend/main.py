@@ -270,6 +270,31 @@ def unassign_cover(absence_id: int, period: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/generate-report")
+def generate_report(query: str, db: Session = Depends(get_db)):
+    try:
+        # Fetch data summaries
+        absences = db.query(Absence).all()
+        covers = db.query(Cover).all()
+        
+        # Format data for AI context
+        # We limit the data to avoid hitting context limits, though Gemini Flash is large.
+        # Just sending the last 100 absences/covers should be enough for most reports.
+        data_summary = "Staff Absences:\n"
+        for a in absences[-100:]:
+            data_summary += f"- Staff: {a.staff.name}, Date: {a.date}, Periods: {a.start_period}-{a.end_period}\n"
+        
+        data_summary += "\nCover Assignments:\n"
+        for c in covers[-100:]:
+             data_summary += f"- Covering Staff: {c.covering_staff.name}, Covered For: {c.absence.staff.name}, Date: {c.absence.date}, Period: {c.period}\n"
+        
+        report = ai_assistant.generate_report(query, data_summary)
+        return {"report": report}
+    except Exception as e:
+        print(f"Report API Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)

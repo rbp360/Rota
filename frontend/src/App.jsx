@@ -20,6 +20,11 @@ const App = () => {
   const [availableStaff, setAvailableStaff] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [dailyRota, setDailyRota] = useState([]);
+  const [showChat, setShowChat] = useState(false);
+  const [chatQuery, setChatQuery] = useState('');
+  const [chatReport, setChatReport] = useState(null);
+  const [chatLoading, setChatLoading] = useState(false);
+
 
   const API_URL = "http://127.0.0.1:8000";
 
@@ -215,6 +220,24 @@ const App = () => {
   const selectAllDay = () => {
     setPeriods([1, 2, 3, 4, 5, 6, 7, 8]);
   };
+
+  const handleGenerateReport = async () => {
+    if (!chatQuery.trim()) return;
+    setChatLoading(true);
+    setChatReport(null);
+    try {
+      const res = await axios.get(`${API_URL}/generate-report`, {
+        params: { query: chatQuery }
+      });
+      setChatReport(res.data.report);
+    } catch (err) {
+      console.error("Failed to generate report:", err);
+      setToast({ type: 'error', message: 'Failed to generate report.' });
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
 
   return (
     <div className="container">
@@ -677,11 +700,86 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      <div style={{ position: 'fixed', bottom: '2rem', right: '2rem' }}>
-        <button className="btn-primary" style={{ borderRadius: '50%', width: '3.5rem', height: '3.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'fixed', bottom: '2rem', left: '2rem', zIndex: 1000 }}>
+        <button
+          onClick={() => setShowChat(!showChat)}
+          className="btn-primary"
+          style={{ borderRadius: '50%', width: '3.5rem', height: '3.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}
+        >
           <MessageSquare />
         </button>
       </div>
+
+      {/* AI Report Chat Modal */}
+      <AnimatePresence>
+        {showChat && (
+          <div className="modal-overlay" onClick={() => setShowChat(false)} style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(4px)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+          }}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass"
+              style={{ width: '100%', maxWidth: '600px', padding: '2rem', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+            >
+              <h2 style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--brand-blue)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><MessageSquare color="var(--primary)" /> AI Report Generator</span>
+                <button onClick={() => setShowChat(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem' }}>×</button>
+              </h2>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                  Ask anything about the rota history and coverage. For example: "How many times has Ben covered this year?"
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={chatQuery}
+                    onChange={(e) => setChatQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleGenerateReport()}
+                    placeholder="Ask a question..."
+                    style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border)', fontSize: '1rem' }}
+                  />
+                  <button
+                    onClick={handleGenerateReport}
+                    className="btn-primary"
+                    disabled={chatLoading || !chatQuery.trim()}
+                    style={{ padding: '0.75rem 1.5rem' }}
+                  >
+                    {chatLoading ? 'Analysing...' : 'Ask'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', background: 'rgba(0,0,0,0.02)', borderRadius: '1rem', minHeight: '150px' }}>
+                {chatLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      style={{ width: '30px', height: '30px', border: '3px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }}
+                    />
+                  </div>
+                ) : chatReport ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                    {chatReport}
+                  </motion.div>
+                ) : (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
+                    <AlertCircle size={32} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
+                    <p>Enter your question above to generate a report.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };
