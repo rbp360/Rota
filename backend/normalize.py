@@ -127,7 +127,14 @@ def normalize_data():
                     clean_val = val.lower().replace(" ", "")
                     free_keywords = ['none', 'nan', 'free', 'available', '0', '0.0', '']
                     
+                    # New Rules: Thai, Music, PE, PHSE free form teachers
+                    specialist_subjects = ['thai', 'music', 'pe', 'p.e.', 'phse']
+                    is_specialist_lesson = any(sub in val.lower() for sub in specialist_subjects)
+                    
                     if not clean_val or clean_val in free_keywords:
+                        is_available = True
+                    elif not is_spec and is_specialist_lesson:
+                        # If NOT a specialist teacher, but doing a specialist subject, they are free!
                         is_available = True
                     
                     db.add(Schedule(

@@ -158,13 +158,26 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
                     break
             
             if is_all_free:
+                # Determine display activity
+                display_activity = "Free"
+                # If they are a form teacher and have an activity, it's likely a specialist lesson (e.g. "6 RG Music")
+                # We can find the activity from the schedule
+                if not s.is_specialist:
+                    reasons = []
+                    for p in period_list:
+                        act = day_schedules[p].activity if day_schedules.get(p) else ""
+                        if act and act.lower() not in ['free', 'none', 'available', '']:
+                            reasons.append(act)
+                    if reasons:
+                        display_activity = f"class doing {', '.join(reasons)}" if len(reasons) == 1 else "Various Activities"
+
                 results.append({
                     "name": s.name, 
                     "profile": s.profile, 
                     "is_priority": s.is_priority,
                     "is_specialist": s.is_specialist,
                     "is_free": True,
-                    "activity": "Free"
+                    "activity": display_activity
                 })
             elif s.is_specialist:
                 # Specialists always shown, but marked red if busy

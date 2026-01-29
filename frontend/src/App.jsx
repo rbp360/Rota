@@ -205,20 +205,26 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '2.5rem' }}>Rota<span style={{ color: 'var(--primary)' }}>AI</span></h1>
-          <p style={{ color: 'var(--text-muted)' }}>Intelligent School Cover Management</p>
+          <h1 style={{ fontSize: '1.75rem' }}>Rota<span style={{ color: 'var(--primary)' }}>AI</span></h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Intelligent School Cover Management</p>
         </div>
-        <div className="glass" style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem', position: 'relative' }}>
+        <div className="glass" style={{
+          padding: '0.4rem',
+          display: 'flex',
+          gap: '0.4rem',
+          position: 'relative',
+          zIndex: showQuickStatus ? 4000 : 10
+        }}>
           <button
             onClick={() => setShowQuickStatus(!showQuickStatus)}
             className={showQuickStatus ? 'btn-primary' : 'glass'}
-            style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             title="Toggle Coverage Overview"
           >
-            <ShieldCheck size={18} />
-            <span style={{ fontSize: '0.875rem' }}>Status</span>
+            <ShieldCheck size={16} />
+            <span style={{ fontSize: '0.8rem' }}>Status</span>
           </button>
 
           <AnimatePresence>
@@ -306,19 +312,19 @@ const App = () => {
             )}
           </AnimatePresence>
 
-          <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}>Absence</button>
-          <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}>Daily Rota</button>
-          <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}><Settings size={18} /></button>
+          <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence</button>
+          <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Daily Rota</button>
+          <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}><Settings size={16} /></button>
         </div>
       </header>
 
-      <div className="glass" style={{ padding: '1rem', marginBottom: '2rem', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+      <div className="glass" style={{ padding: '0.5rem', marginBottom: '1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
         {days.map(d => (
           <button
             key={d}
             onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}
             className={selectedDay === d ? 'btn-primary' : 'glass'}
-            style={{ padding: '0.5rem 1.5rem', flex: 1, minWidth: '100px' }}
+            style={{ padding: '0.4rem 1rem', flex: 1, minWidth: '80px', fontSize: '0.875rem' }}
           >
             {d}
           </button>
@@ -327,23 +333,23 @@ const App = () => {
 
       <main>
         {activeTab === 'absence' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid-cols">
-              <div className="glass" style={{ padding: '2rem' }}>
-                <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <UserPlus size={20} color="var(--primary)" /> Who is Absent?
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 350px) 1fr', gap: '1rem', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="glass" style={{ padding: '1.25rem' }}>
+                <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <UserPlus size={18} color="var(--primary)" /> Who is Absent?
                 </h3>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Select Staff</label>
-                  <select value={absentPerson} onChange={(e) => { setAbsentPerson(e.target.value); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Select Staff</label>
+                  <select style={{ padding: '0.5rem', fontSize: '0.875rem' }} value={absentPerson} onChange={(e) => { setAbsentPerson(e.target.value); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}>
                     <option value="">Select a person...</option>
                     {staffList.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
-                <div style={{ marginBottom: '2rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Periods Absent</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Periods Absent</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem', marginBottom: '0.75rem' }}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
                       const isCovered = coveredPeriods.includes(p);
                       const isSelected = periods.includes(p);
@@ -353,14 +359,15 @@ const App = () => {
                           onClick={() => handlePeriodClick(p)}
                           className="glass"
                           style={{
-                            padding: '0.5rem',
+                            padding: '0.4rem',
+                            fontSize: '0.8rem',
                             background: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent'),
                             borderColor: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)'),
                             color: 'white',
                             transition: 'all 0.3s ease'
                           }}
                         >
-                          {isCovered ? <CheckCircle size={14} style={{ marginRight: '4px' }} /> : ''} P{p}
+                          {isCovered ? <CheckCircle size={12} style={{ marginRight: '2px' }} /> : ''} P{p}
                         </button>
                       );
                     })}
@@ -368,7 +375,7 @@ const App = () => {
                   <button
                     onClick={selectAllDay}
                     className="glass"
-                    style={{ width: '100%', padding: '0.5rem', background: periods.length === 8 ? 'var(--primary)' : 'rgba(255,255,255,0.05)' }}
+                    style={{ width: '100%', padding: '0.4rem', fontSize: '0.8rem', background: periods.length === 8 ? 'var(--primary)' : 'rgba(255,255,255,0.05)' }}
                   >
                     Select All Day
                   </button>
@@ -376,7 +383,7 @@ const App = () => {
 
                 <button
                   className="btn-primary"
-                  style={{ width: '100%', marginBottom: '1rem' }}
+                  style={{ width: '100%', marginBottom: '0.75rem', padding: '0.6rem' }}
                   onClick={handleSuggest}
                   disabled={!absentPerson || periods.length === 0}
                 >
@@ -385,7 +392,7 @@ const App = () => {
 
                 <button
                   className="glass"
-                  style={{ width: '100%', padding: '0.75rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                  style={{ width: '100%', padding: '0.6rem', fontSize: '0.875rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
                   onClick={() => setShowSummary(true)}
                   disabled={!absentPerson}
                 >
@@ -393,59 +400,54 @@ const App = () => {
                 </button>
               </div>
 
-              <div className="glass" style={{ padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ShieldCheck size={20} color="var(--accent)" /> AI Suggestion
+              <div className="glass" style={{ padding: '1.25rem', minHeight: '200px' }}>
+                <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ShieldCheck size={18} color="var(--accent)" /> AI Suggestion
                 </h3>
 
                 <AnimatePresence>
                   {!suggestions && !loading && (
                     <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      <AlertCircle size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                      <p>Optionally generate AI suggestions, or just pick from availability below.</p>
+                      <AlertCircle size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                      <p style={{ fontSize: '0.75rem' }}>Generate AI suggestions or pick below.</p>
                     </div>
                   )}
 
                   {loading && (
-                    <div style={{ margin: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', margin: '2rem 0' }}>
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        style={{ width: '40px', height: '40px', border: '4px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }}
+                        style={{ width: '30px', height: '30px', border: '3px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }}
                       />
                     </div>
                   )}
 
                   {suggestions && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <div className="glass" style={{ padding: '1rem', marginBottom: '1rem', background: 'rgba(255,255,255,0.03)', whiteSpace: 'pre-line', fontSize: '0.875rem', lineHeight: '1.6' }}>
+                      <div className="glass" style={{ padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.03)', whiteSpace: 'pre-line', fontSize: '0.75rem', lineHeight: '1.4' }}>
                         {suggestions}
-                      </div>
-                      <div style={{ marginTop: 'auto', display: 'flex', gap: '1rem' }}>
-                        <button className="btn-primary" style={{ flex: 1 }}>Accept AI Selection</button>
-                        <button className="glass" style={{ flex: 1, padding: '0.75rem' }}>Refine</button>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass" style={{ padding: '2rem' }}>
-              <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Calendar size={20} color="var(--primary)" /> Availability Checker
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
-                  {periods.length > 0 ? `(Click a teacher to assign to P${periods.sort().join(', P')})` : '(Select periods above)'}
+            <div className="glass" style={{ padding: '1.5rem', height: '100%' }}>
+              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem' }}>
+                <Calendar size={22} color="var(--primary)" /> Availability Checker
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                  {periods.length > 0 ? `(Target: P${periods.sort().join(', P')})` : '(Select periods)'}
                 </span>
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
                 {availableStaff.filter(s => s.name !== absentPerson).length > 0 ? (
                   availableStaff.filter(s => s.name !== absentPerson).map((s, i) => {
                     const isBusySpecialist = !s.is_free;
                     let bgColor = 'rgba(255,255,255,0.03)';
                     let borderColor = 'var(--border)';
-                    let textColor = 'var(--text-main)';
 
                     if (s.is_priority && s.is_free) {
                       bgColor = 'rgba(99, 102, 241, 0.15)';
@@ -463,35 +465,41 @@ const App = () => {
                         onClick={() => handleAssignCover(s.name)}
                         className="glass"
                         style={{
-                          padding: '0.75rem',
+                          padding: '0.6rem',
                           cursor: 'pointer',
                           background: bgColor,
                           border: `1px solid ${borderColor}`,
-                          opacity: 1
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontWeight: '600', color: s.is_priority && s.is_free ? 'var(--primary)' : (isBusySpecialist ? '#ef4444' : 'var(--text-main)') }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                          <div style={{ fontWeight: '700', fontSize: '0.9rem', color: s.is_priority && s.is_free ? 'var(--primary)' : (isBusySpecialist ? '#ef4444' : 'var(--text-main)') }}>
                             {s.name}
                           </div>
-                          {!s.is_free && <span style={{ fontSize: '0.65rem', background: '#ef4444', padding: '1px 5px', borderRadius: '4px', color: 'white' }}>BUSY</span>}
+                          {!s.is_free && <span style={{ fontSize: '0.6rem', background: '#ef4444', padding: '1px 4px', borderRadius: '3px', color: 'white' }}>BUSY</span>}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.profile || 'Staff Member'}</div>
-                        {!s.is_free && (
-                          <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: '#ef4444', fontWeight: '500' }}>
-                            Doing: {s.activity}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{s.profile || 'Staff Member'}</div>
+                        {s.activity && s.activity !== 'Free' && (
+                          <div style={{
+                            fontSize: '0.7rem',
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                            background: s.is_free ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            color: s.is_free ? 'var(--accent)' : '#ef4444',
+                            fontWeight: '600'
+                          }}>
+                            {s.is_free ? s.activity : `Doing: ${s.activity}`}
                           </div>
                         )}
                       </motion.div>
                     );
                   })
                 ) : (
-                  <p style={{ color: 'var(--text-muted)', gridColumn: '1/-1' }}>
-                    {periods.length > 0 ? 'No staff members are free for all selected periods.' : 'Select periods to see who is available.'}
+                  <p style={{ color: 'var(--text-muted)', gridColumn: '1/-1', fontSize: '0.875rem' }}>
+                    {periods.length > 0 ? 'No staff members are free for all selected periods.' : 'Select periods to see availability.'}
                   </p>
                 )}
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
       </main>
