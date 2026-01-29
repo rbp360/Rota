@@ -113,13 +113,49 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
     try:
         period_list = [int(p) for p in periods.split(',') if p]
         staff = db.query(Staff).filter(Staff.is_active == True).all()
+        
+        # Fetch ALL covers for today to check if teachers are already busy covering others
+        # We assume "today" is the date of the absence we are managing
+        today = pd.Timestamp.now().date()
+        active_covers = db.query(Cover).join(Absence).filter(Absence.date == today).all()
+        
+        # Organize covers by staff_id and period for quick lookup
+        # cover_map[staff_id][period] = "Name of person they are covering"
+        cover_map = {}
+        for c in active_covers:
+            if c.covering_staff_id not in cover_map:
+                cover_map[c.covering_staff_id] = {}
+            cover_map[c.covering_staff_id][c.period] = c.absence.staff.name
+
         results = []
         for s in staff:
-            # Filter schedules for this staff on this day
+            # 1. Check their base timetable
             day_schedules = {sch.period: sch for sch in s.schedules if sch.day_of_week.lower() == day.lower()}
             
+            # 2. check their "Live" covers
+            staff_covers = cover_map.get(s.id, {})
+            
             # Check if they are free in ALL requested periods
-            is_all_free = all(day_schedules.get(p) and day_schedules[p].is_free for p in period_list)
+            # They are free ONLY if: 
+            # (a) their schedule says they are free AND (b) they aren't already covering someone
+            is_all_free = True
+            first_busy_reason = None
+
+            for p in period_list:
+                # check timetable
+                is_timetable_free = day_schedules.get(p) and day_schedules[p].is_free
+                
+                # check existing covers
+                who_covering = staff_covers.get(p)
+                
+                if who_covering:
+                    is_all_free = False
+                    first_busy_reason = f"Covering {who_covering}"
+                    break
+                elif not is_timetable_free:
+                    is_all_free = False
+                    first_busy_reason = day_schedules[p].activity if day_schedules.get(p) else "Busy"
+                    break
             
             if is_all_free:
                 results.append({
@@ -128,27 +164,23 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
                     "is_priority": s.is_priority,
                     "is_specialist": s.is_specialist,
                     "is_free": True,
-                    "activity": f"Free (Read: '{day_schedules[period_list[0]].activity if period_list else ''}')"
+                    "activity": "Free"
                 })
             elif s.is_specialist:
-                # Specialist is busy - find out what they are doing in the first busy period
-                busy_activity = "Busy"
-                for p in period_list:
-                    sch = day_schedules.get(p)
-                    if sch and not sch.is_free:
-                        busy_activity = sch.activity or "Busy"
-                        break
-                
+                # Specialists always shown, but marked red if busy
                 results.append({
                     "name": s.name, 
                     "profile": s.profile, 
                     "is_priority": s.is_priority,
                     "is_specialist": True,
                     "is_free": False,
-                    "activity": busy_activity
+                    "activity": first_busy_reason
                 })
+            # Form teachers (not specialists) are hidden if busy
+            
         return results
     except Exception as e:
+        print(f"Availability Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/assign-cover")

@@ -13,6 +13,8 @@ const App = () => {
 
   const [currentAbsenceId, setCurrentAbsenceId] = useState(null);
   const [coveredPeriods, setCoveredPeriods] = useState([]);
+  const [detailedCovers, setDetailedCovers] = useState({}); // {period: staffName}
+  const [showSummary, setShowSummary] = useState(false);
   const [selectedDay, setSelectedDay] = useState('Thursday');
   const [availableStaff, setAvailableStaff] = useState([]);
   const [staffList, setStaffList] = useState([]);
@@ -55,6 +57,30 @@ const App = () => {
     };
     fetchStaff();
   }, []);
+
+  const fetchDetailedCovers = async (aid) => {
+    if (!aid) return;
+    try {
+      const res = await axios.get(`${API_URL}/covers/${aid}`);
+      const mapping = {};
+      res.data.forEach(c => {
+        mapping[c.period] = c.staff_name;
+      });
+      setDetailedCovers(mapping);
+      setCoveredPeriods(res.data.map(c => c.period));
+    } catch (err) {
+      console.error("Failed to fetch covers:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentAbsenceId) {
+      fetchDetailedCovers(currentAbsenceId);
+    } else {
+      setDetailedCovers({});
+      setCoveredPeriods([]);
+    }
+  }, [currentAbsenceId]);
 
   // Helper to ensure an absence record exists in the DB
   const ensureAbsence = async () => {
@@ -113,6 +139,11 @@ const App = () => {
       });
 
       setCoveredPeriods(prev => [...new Set([...prev, ...periods])]);
+      setDetailedCovers(prev => {
+        const next = { ...prev };
+        periods.forEach(p => next[p] = staffName);
+        return next;
+      });
       setPeriods([]); // Deselect periods after assignment
       setSuggestions(null); // Clear suggestions
       setToast({ type: 'success', message: `${staffName} assigned to periods ${periods.join(', ')}` });
@@ -131,6 +162,11 @@ const App = () => {
           params: { absence_id: currentAbsenceId, period: p }
         });
         setCoveredPeriods(prev => prev.filter(x => x !== p));
+        setDetailedCovers(prev => {
+          const next = { ...prev };
+          delete next[p];
+          return next;
+        });
         setToast({ type: 'info', message: `Unassigned period ${p}` });
       } catch (err) {
         setToast({ type: 'error', message: 'Failed to unassign.' });
@@ -244,11 +280,20 @@ const App = () => {
 
                 <button
                   className="btn-primary"
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', marginBottom: '1rem' }}
                   onClick={handleSuggest}
                   disabled={!absentPerson || periods.length === 0}
                 >
                   {loading ? 'Analyzing...' : 'Generate AI Suggestions'}
+                </button>
+
+                <button
+                  className="glass"
+                  style={{ width: '100%', padding: '0.75rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                  onClick={() => setShowSummary(true)}
+                  disabled={!absentPerson}
+                >
+                  View Cover Summary
                 </button>
               </div>
 
@@ -354,6 +399,47 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {/* Cover Summary Modal */}
+      <AnimatePresence>
+        {showSummary && (
+          <div className="modal-overlay" onClick={() => setShowSummary(false)} style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.8)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+          }}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass"
+              style={{ width: '100%', maxWidth: '500px', padding: '2rem' }}
+            >
+              <h2 style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Cover Summary: {absentPerson}
+                <button onClick={() => setShowSummary(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.5rem' }}>×</button>
+              </h2>
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                  <div key={p} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '1rem', borderRadius: '1rem',
+                    background: coveredPeriods.includes(p) ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${coveredPeriods.includes(p) ? '#22c55e' : '#ef4444'}`
+                  }}>
+                    <span style={{ fontWeight: 'bold' }}>Period {p}</span>
+                    <span style={{ color: coveredPeriods.includes(p) ? '#22c55e' : '#ef4444', fontWeight: '500' }}>
+                      {detailedCovers[p] ? `Covered by: ${detailedCovers[p]}` : 'UNCOVERED'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button className="btn-primary" style={{ width: '100%', marginTop: '2rem' }} onClick={() => setShowSummary(false)}>Close</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div style={{ position: 'fixed', bottom: '2rem', right: '2rem' }}>
         <button className="btn-primary" style={{ borderRadius: '50%', width: '3.5rem', height: '3.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
