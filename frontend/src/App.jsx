@@ -15,6 +15,7 @@ const App = () => {
   const [coveredPeriods, setCoveredPeriods] = useState([]);
   const [detailedCovers, setDetailedCovers] = useState({}); // {period: staffName}
   const [showSummary, setShowSummary] = useState(false);
+  const [showQuickStatus, setShowQuickStatus] = useState(false);
   const [selectedDay, setSelectedDay] = useState('Thursday');
   const [availableStaff, setAvailableStaff] = useState([]);
   const [staffList, setStaffList] = useState([]);
@@ -209,7 +210,102 @@ const App = () => {
           <h1 style={{ fontSize: '2.5rem' }}>Rota<span style={{ color: 'var(--primary)' }}>AI</span></h1>
           <p style={{ color: 'var(--text-muted)' }}>Intelligent School Cover Management</p>
         </div>
-        <div className="glass" style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+        <div className="glass" style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem', position: 'relative' }}>
+          <button
+            onClick={() => setShowQuickStatus(!showQuickStatus)}
+            className={showQuickStatus ? 'btn-primary' : 'glass'}
+            style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            title="Toggle Coverage Overview"
+          >
+            <ShieldCheck size={18} />
+            <span style={{ fontSize: '0.875rem' }}>Status</span>
+          </button>
+
+          <AnimatePresence>
+            {showQuickStatus && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                className="glass"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  width: '320px',
+                  padding: '1.5rem',
+                  marginTop: '0.75rem',
+                  zIndex: 3000,
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                  border: '1px solid var(--primary)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem' }}>Coverage Status</h4>
+                  <button onClick={() => setShowQuickStatus(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  {absentPerson ? `Absence: ${absentPerson}` : 'No staff selected'}
+                </p>
+
+                {/* Visual Strip */}
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '1.5rem' }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                    <div key={p} style={{
+                      flex: 1,
+                      height: '10px',
+                      background: coveredPeriods.includes(p) ? 'var(--accent)' : 'var(--danger)',
+                      borderRadius: '2px',
+                      opacity: coveredPeriods.includes(p) ? 1 : 0.6
+                    }} title={`Period ${p}: ${detailedCovers[p] || 'Uncovered'}`} />
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {(() => {
+                    const allPeriods = [1, 2, 3, 4, 5, 6, 7, 8];
+                    let currentStaff = detailedCovers[1] || null;
+                    let start = 1;
+                    let summaryParts = [];
+
+                    for (let p = 2; p <= 9; p++) {
+                      const staff = detailedCovers[p] || null;
+                      if (staff !== currentStaff || p === 9) {
+                        const range = start === p - 1 ? `P${start}` : `P${start}-${p - 1}`;
+                        summaryParts.push({ range, staff: currentStaff });
+                        start = p;
+                        currentStaff = staff;
+                      }
+                    }
+
+                    return summaryParts.map((part, i) => (
+                      <div key={i} style={{
+                        fontSize: '0.8rem',
+                        padding: '0.65rem',
+                        borderRadius: '0.5rem',
+                        background: !part.staff ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                        color: !part.staff ? 'var(--danger)' : 'var(--accent)',
+                        borderLeft: `4px solid ${!part.staff ? 'var(--danger)' : 'var(--accent)'}`,
+                        display: 'flex',
+                        justifyContent: 'space-between'
+                      }}>
+                        <span style={{ fontWeight: 600 }}>{part.range}</span>
+                        <span>{part.staff ? part.staff : 'HOLE'}</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                {!absentPerson && (
+                  <div style={{ fontSize: '0.75rem', textAlign: 'center', marginTop: '1rem', color: 'var(--text-muted)' }}>
+                    Select a staff member to see their cover situation.
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}>Absence</button>
           <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}>Daily Rota</button>
           <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-primary' : ''} style={{ padding: '0.5rem 1rem' }}><Settings size={18} /></button>
@@ -220,7 +316,7 @@ const App = () => {
         {days.map(d => (
           <button
             key={d}
-            onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setCurrentAbsenceId(null); setSuggestions(null); }}
+            onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}
             className={selectedDay === d ? 'btn-primary' : 'glass'}
             style={{ padding: '0.5rem 1.5rem', flex: 1, minWidth: '100px' }}
           >
@@ -239,7 +335,7 @@ const App = () => {
                 </h3>
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Select Staff</label>
-                  <select value={absentPerson} onChange={(e) => { setAbsentPerson(e.target.value); setCoveredPeriods([]); setCurrentAbsenceId(null); setSuggestions(null); }}>
+                  <select value={absentPerson} onChange={(e) => { setAbsentPerson(e.target.value); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}>
                     <option value="">Select a person...</option>
                     {staffList.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
