@@ -141,7 +141,7 @@ const App = () => {
   };
 
   const selectAllDay = () => {
-    setPeriods([1, 2, 3, 4, 5, 6]);
+    setPeriods([1, 2, 3, 4, 5, 6, 7, 8]);
   };
 
   return (
@@ -209,8 +209,8 @@ const App = () => {
 
                 <div style={{ marginBottom: '2rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>Periods Absent</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
-                    {[1, 2, 3, 4, 5, 6].map(p => {
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
                       const isCovered = coveredPeriods.includes(p);
                       const isSelected = periods.includes(p);
                       return (
@@ -234,7 +234,7 @@ const App = () => {
                   <button
                     onClick={selectAllDay}
                     className="glass"
-                    style={{ width: '100%', padding: '0.5rem', background: periods.length === 6 ? 'var(--primary)' : 'rgba(255,255,255,0.05)' }}
+                    style={{ width: '100%', padding: '0.5rem', background: periods.length === 8 ? 'var(--primary)' : 'rgba(255,255,255,0.05)' }}
                   >
                     Select All Day
                   </button>

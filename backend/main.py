@@ -128,7 +128,7 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
                     "is_priority": s.is_priority,
                     "is_specialist": s.is_specialist,
                     "is_free": True,
-                    "activity": "Free"
+                    "activity": f"Free (Read: '{day_schedules[period_list[0]].activity if period_list else ''}')"
                 })
             elif s.is_specialist:
                 # Specialist is busy - find out what they are doing in the first busy period

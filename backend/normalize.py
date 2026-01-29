@@ -55,6 +55,9 @@ def normalize_data():
                 "Claire", "Jake", "Retno", "Jacinta", "Sunny"
             ]
             
+            # Explicitly force is_specialist to match the list exactly, else False (0)
+            is_spec = (staff_name in specialists_list)
+
             staff = db.query(Staff).filter(Staff.name == staff_name).first()
             if not staff:
                 staff = Staff(
@@ -62,7 +65,7 @@ def normalize_data():
                     role="Teacher" if "Assistant" not in teacher_profiles.get(staff_name, "") else "TA",
                     profile=teacher_profiles.get(staff_name, ""),
                     is_priority=(staff_name == "Claire"),
-                    is_specialist=(staff_name in specialists_list or staff_name in teacher_profiles),
+                    is_specialist=is_spec,
                     is_active=True
                 )
                 db.add(staff)
@@ -77,7 +80,10 @@ def normalize_data():
                     if not val: continue
                     val_str = str(val).strip().lower()
                     for d in days_list:
-                        if d.lower() in val_str:
+                        if d.lower() == val_str: # Exact match
+                            day_cols[d] = c_idx + 1
+                            found_in_row = True
+                        elif d.lower() in val_str and len(val_str) < 15: # Partial match (e.g. "Monday 25th")
                             day_cols[d] = c_idx + 1
                             found_in_row = True
                 if found_in_row and len(day_cols) >= 3:
@@ -88,30 +94,40 @@ def normalize_data():
                 day_cols = {d: i+2 for i, d in enumerate(days_list)}
                 header_row_idx = 1
             
-            # Parse periods 1-6
-            # We look for rows that likely contain period data
-            p_rows = list(sheet.iter_rows(min_row=header_row_idx + 1, max_row=header_row_idx + 15, values_only=True))
+            print(f"  Day Columns: {day_cols} (Header Row: {header_row_idx})")
+
+            # Parse periods 1-8
+            p_rows_map = {}
+            for r_idx, row in enumerate(sheet.iter_rows(max_row=60, values_only=True)):
+                # Check first 5 columns for period markers
+                markers = [str(v).strip().lower() for v in row[:5] if v is not None]
+                for p_num in range(1, 9):
+                    if p_num in p_rows_map: continue
+                    # Common markers: "1", "P1", "Period 1", "P.1"
+                    possible = [str(p_num), f"p{p_num}", f"period {p_num}", f"p.{p_num}", f"per {p_num}"]
+                    if any(m in markers for m in possible):
+                        p_rows_map[p_num] = row
+                        break
             
-            for p_num in range(1, 7): # P1-P6
-                row_data = p_rows[p_num-1] if (p_num-1) < len(p_rows) else [None]*50
-                
+            for p_num in range(1, 9):
+                row_data = p_rows_map.get(p_num)
+                if row_data is None:
+                    # Fallback
+                    rows_cached = list(sheet.iter_rows(min_row=header_row_idx + 1, max_row=header_row_idx + 30, values_only=True))
+                    row_data = rows_cached[p_num-1] if (p_num-1) < len(rows_cached) else [None]*50
+                    print(f"    P{p_num} using fallback row")
+                else:
+                    print(f"    P{p_num} found marker row")
+
                 for day, col in day_cols.items():
                     raw_val = row_data[col-1] if col <= len(row_data) else None
                     val = str(raw_val).strip() if raw_val is not None else ""
                     
                     is_available = False
-                    
-                    # Debug print for known busy form teachers (e.g. Jill/Charlotte)
-                    if staff_name in ["Jill", "Charlotte"] and day == "Thursday" and p_num == 1:
-                        print(f"DEBUG {staff_name} Thu P1: '{val}'")
-
-                    # STRICTER CHECK:
-                    # A cell is only free if it's explicitly empty or key 'free' words.
-                    # Anything else (dates, room numbers, subjects, form names like '4B') counts as BUSY.
                     clean_val = val.lower().replace(" ", "")
-                    free_keywords = ['none', 'nan', 'free', 'available', '0', '0.0']
+                    free_keywords = ['none', 'nan', 'free', 'available', '0', '0.0', '']
                     
-                    if not val or clean_val in free_keywords:
+                    if not clean_val or clean_val in free_keywords:
                         is_available = True
                     
                     db.add(Schedule(
