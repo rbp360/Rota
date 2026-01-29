@@ -19,10 +19,24 @@ const App = () => {
   const [selectedDay, setSelectedDay] = useState('Thursday');
   const [availableStaff, setAvailableStaff] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [dailyRota, setDailyRota] = useState([]);
 
   const API_URL = "http://127.0.0.1:8000";
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+  const getTargetDate = (dayName) => {
+    const today = new Date();
+    const currentDayNum = today.getDay(); // 0 is Sunday, 1 is Monday...
+    const dayIndices = { 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5 };
+    const targetIndex = dayIndices[dayName];
+
+    // Calculate difference (assuming we want the date in the current week)
+    const diff = targetIndex - currentDayNum;
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + diff);
+    return targetDate.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
     if (toast) {
@@ -38,7 +52,8 @@ const App = () => {
         return;
       }
       try {
-        const res = await axios.get(`${API_URL}/availability?periods=${periods.join(',')}&day=${selectedDay}`);
+        const targetDate = getTargetDate(selectedDay);
+        const res = await axios.get(`${API_URL}/availability?periods=${periods.join(',')}&day=${selectedDay}&date=${targetDate}`);
         setAvailableStaff(res.data);
       } catch (err) {
         console.error("Failed to fetch availability:", err);
@@ -58,6 +73,24 @@ const App = () => {
     };
     fetchStaff();
   }, []);
+
+  const fetchDailyRota = async () => {
+    try {
+      const targetDate = getTargetDate(selectedDay);
+      const res = await axios.get(`${API_URL}/daily-rota`, {
+        params: { date: targetDate }
+      });
+      setDailyRota(res.data);
+    } catch (err) {
+      console.error("Failed to fetch daily rota:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'rota') {
+      fetchDailyRota();
+    }
+  }, [activeTab, selectedDay]);
 
   const fetchDetailedCovers = async (aid) => {
     if (!aid) return;
@@ -91,7 +124,7 @@ const App = () => {
       const res = await axios.post(`${API_URL}/absences`, null, {
         params: {
           staff_name: absentPerson,
-          date: new Date().toISOString().split('T')[0],
+          date: getTargetDate(selectedDay),
           start_period: Math.min(...periods),
           end_period: Math.max(...periods)
         }
@@ -503,6 +536,103 @@ const App = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'rota' && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--primary)' }}>
+                <Calendar size={28} /> Daily Cover Sheet: {selectedDay}
+              </h2>
+              <button className="btn-primary" onClick={fetchDailyRota} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <RotateCcw size={18} /> Refresh
+              </button>
+            </div>
+
+            {dailyRota.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+                <ShieldCheck size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+                <p>No absences logged for today yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '1.5rem' }}>
+                {dailyRota.map((row, idx) => {
+                  const requiredCovers = row.end_period - row.start_period + 1;
+                  const isFullyCovered = row.covers.length >= requiredCovers;
+
+                  return (
+                    <div key={idx} className="glass" style={{ padding: '1.5rem', borderLeft: `6px solid ${isFullyCovered ? 'var(--accent)' : 'var(--danger)'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{row.staff_name}</h3>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Absent: Periods {row.start_period}-{row.end_period}</p>
+                        </div>
+                        <span style={{
+                          background: isFullyCovered ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                          color: isFullyCovered ? 'var(--accent)' : 'var(--danger)',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '1rem',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          border: '1px solid currentColor'
+                        }}>
+                          {isFullyCovered ? 'FULLY COVERED' : 'PARTIAL COVER'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                        {Array.from({ length: requiredCovers }, (_, i) => row.start_period + i).map(p => {
+                          const coverage = row.covers.find(c => c.period === p);
+                          return (
+                            <div key={p} className="glass" style={{
+                              padding: '0.75rem',
+                              textAlign: 'center',
+                              background: coverage ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                              borderColor: coverage ? 'var(--accent)' : 'var(--danger)',
+                              position: 'relative'
+                            }}>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>P{p}</div>
+                              <div style={{ fontSize: '0.85rem', color: coverage ? 'var(--accent)' : 'var(--danger)', marginBottom: coverage ? '0.5rem' : '0' }}>
+                                {coverage ? coverage.covering_staff_name : '🚨 NEEDS COVER'}
+                              </div>
+                              {coverage && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await axios.delete(`${API_URL}/unassign-cover`, {
+                                        params: { absence_id: row.absence_id, period: p }
+                                      });
+                                      fetchDailyRota(); // Refresh list
+                                      setToast({ type: 'info', message: `Unassigned ${coverage.covering_staff_name} from Period ${p}` });
+                                    } catch (err) {
+                                      setToast({ type: 'error', message: 'Failed to unassign.' });
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'var(--danger)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    padding: '2px 8px',
+                                    fontSize: '0.65rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  UNASSIGN
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
         )}
       </main>
 

@@ -235,6 +235,32 @@ def get_covers(absence_id: int, db: Session = Depends(get_db)):
     covers = db.query(Cover).filter(Cover.absence_id == absence_id).all()
     return [{"period": c.period, "staff_name": c.covering_staff.name} for c in covers]
 
+@app.get("/daily-rota")
+def get_daily_rota(date: str, db: Session = Depends(get_db)):
+    try:
+        target_date = pd.to_datetime(date).date()
+        absences = db.query(Absence).filter(Absence.date == target_date).all()
+        
+        results = []
+        for a in absences:
+            covers = []
+            for c in a.covers:
+                covers.append({
+                    "period": c.period,
+                    "covering_staff_name": c.covering_staff.name if c.covering_staff else "Unknown"
+                })
+            
+            results.append({
+                "absence_id": a.id,
+                "staff_name": a.staff.name,
+                "start_period": a.start_period,
+                "end_period": a.end_period,
+                "covers": covers
+            })
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/unassign-cover")
 def unassign_cover(absence_id: int, period: int, db: Session = Depends(get_db)):
     try:
