@@ -17,6 +17,8 @@ const App = () => {
   const [availableStaff, setAvailableStaff] = useState([]);
   const [staffList, setStaffList] = useState([]);
 
+  const API_URL = "http://127.0.0.1:8000";
+
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
   useEffect(() => {
@@ -33,7 +35,7 @@ const App = () => {
         return;
       }
       try {
-        const res = await axios.get(`http://localhost:8000/availability?periods=${periods.join(',')}&day=${selectedDay}`);
+        const res = await axios.get(`${API_URL}/availability?periods=${periods.join(',')}&day=${selectedDay}`);
         setAvailableStaff(res.data);
       } catch (err) {
         console.error("Failed to fetch availability:", err);
@@ -45,7 +47,7 @@ const App = () => {
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const res = await axios.get('http://localhost:8000/staff');
+        const res = await axios.get(`${API_URL}/staff`);
         setStaffList(res.data.map(s => s.name));
       } catch (err) {
         console.error("Failed to fetch staff:", err);
@@ -59,7 +61,7 @@ const App = () => {
     if (currentAbsenceId) return currentAbsenceId;
 
     try {
-      const res = await axios.post('http://localhost:8000/absences', null, {
+      const res = await axios.post(`${API_URL}/absences`, null, {
         params: {
           staff_name: absentPerson,
           date: new Date().toISOString().split('T')[0],
@@ -83,7 +85,7 @@ const App = () => {
       const aid = await ensureAbsence();
       if (!aid) { setLoading(false); return; }
 
-      const suggestRes = await axios.get(`http://localhost:8000/suggest-cover/${aid}?day=${selectedDay}`);
+      const suggestRes = await axios.get(`${API_URL}/suggest-cover/${aid}?day=${selectedDay}`);
       setSuggestions(suggestRes.data.suggestions);
       setLoading(false);
     } catch (error) {
@@ -102,7 +104,7 @@ const App = () => {
       const aid = await ensureAbsence();
       if (!aid) return;
 
-      await axios.post('http://localhost:8000/assign-cover', null, {
+      await axios.post(`${API_URL}/assign-cover`, null, {
         params: {
           absence_id: aid,
           staff_name: staffName,
@@ -123,7 +125,7 @@ const App = () => {
     if (coveredPeriods.includes(p)) {
       if (!currentAbsenceId) return;
       try {
-        await axios.delete(`http://localhost:8000/unassign-cover`, {
+        await axios.delete(`${API_URL}/unassign-cover`, {
           params: { absence_id: currentAbsenceId, period: p }
         });
         setCoveredPeriods(prev => prev.filter(x => x !== p));

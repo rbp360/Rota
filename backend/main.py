@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from . import database
 from .database import engine, SessionLocal, Staff, Schedule, Absence, Cover, Setting
 import pandas as pd
@@ -181,3 +182,7 @@ def unassign_cover(absence_id: int, period: int, db: Session = Depends(get_db)):
         return {"message": f"Unassigned period {period}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
