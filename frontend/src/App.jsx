@@ -113,6 +113,8 @@ const App = () => {
       });
 
       setCoveredPeriods(prev => [...new Set([...prev, ...periods])]);
+      setPeriods([]); // Deselect periods after assignment
+      setSuggestions(null); // Clear suggestions
       setToast({ type: 'success', message: `${staffName} assigned to periods ${periods.join(', ')}` });
     } catch (error) {
       console.error("Error assigning cover:", error);
@@ -297,8 +299,8 @@ const App = () => {
               </h3>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
-                {availableStaff.length > 0 ? (
-                  availableStaff.map((s, i) => {
+                {availableStaff.filter(s => s.name !== absentPerson).length > 0 ? (
+                  availableStaff.filter(s => s.name !== absentPerson).map((s, i) => {
                     const isBusySpecialist = !s.is_free;
                     let bgColor = 'rgba(255,255,255,0.03)';
                     let borderColor = 'var(--border)';
@@ -317,14 +319,14 @@ const App = () => {
                         key={i}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => s.is_free && handleAssignCover(s.name)}
+                        onClick={() => handleAssignCover(s.name)}
                         className="glass"
                         style={{
                           padding: '0.75rem',
-                          cursor: s.is_free ? 'pointer' : 'default',
+                          cursor: 'pointer',
                           background: bgColor,
                           border: `1px solid ${borderColor}`,
-                          opacity: s.is_free ? 1 : 0.8
+                          opacity: 1
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
