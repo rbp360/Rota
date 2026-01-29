@@ -195,8 +195,9 @@ const App = () => {
             style={{
               position: 'fixed', bottom: '2rem', left: '50%', transform: 'translateX(-50%)',
               zIndex: 1000, background: toast.type === 'success' ? 'var(--accent)' : (toast.type === 'info' ? 'var(--primary)' : 'var(--danger)'),
-              padding: '1rem 2rem', borderRadius: '2rem', boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-              display: 'flex', alignItems: 'center', gap: '0.5rem'
+              padding: '1rem 2rem', borderRadius: '2rem', boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+              display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'white',
+              fontWeight: '600'
             }}
           >
             {toast.type === 'success' ? <CheckCircle size={20} /> : (toast.type === 'info' ? <RotateCcw size={20} /> : <AlertCircle size={20} />)}
@@ -207,8 +208,8 @@ const App = () => {
 
       <header style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem' }}>Rota<span style={{ color: 'var(--primary)' }}>AI</span></h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Intelligent School Cover Management</p>
+          <h1 style={{ fontSize: '1.75rem', color: 'var(--brand-blue)' }}>St Andrews <span style={{ color: 'var(--brand-green)' }}>RotaAI</span></h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: '500' }}>Green Valley | Intelligent Cover Management</p>
         </div>
         <div className="glass" style={{
           padding: '0.4rem',
@@ -219,11 +220,11 @@ const App = () => {
         }}>
           <button
             onClick={() => setShowQuickStatus(!showQuickStatus)}
-            className={showQuickStatus ? 'btn-primary' : 'glass'}
+            className={showQuickStatus ? 'btn-nav' : 'glass'}
             style={{ padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             title="Toggle Coverage Overview"
           >
-            <ShieldCheck size={16} />
+            <ShieldCheck size={16} color={showQuickStatus ? 'white' : 'var(--primary)'} />
             <span style={{ fontSize: '0.8rem' }}>Status</span>
           </button>
 
@@ -242,8 +243,9 @@ const App = () => {
                   padding: '1.5rem',
                   marginTop: '0.75rem',
                   zIndex: 3000,
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-                  border: '1px solid var(--primary)'
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.1)',
+                  border: '1px solid var(--primary)',
+                  color: 'var(--text-main)'
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -312,9 +314,9 @@ const App = () => {
             )}
           </AnimatePresence>
 
-          <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence</button>
-          <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Daily Rota</button>
-          <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-primary' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}><Settings size={16} /></button>
+          <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence</button>
+          <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Daily Rota</button>
+          <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}><Settings size={16} /></button>
         </div>
       </header>
 
@@ -323,7 +325,7 @@ const App = () => {
           <button
             key={d}
             onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}
-            className={selectedDay === d ? 'btn-primary' : 'glass'}
+            className={selectedDay === d ? 'btn-nav' : 'glass'}
             style={{ padding: '0.4rem 1rem', flex: 1, minWidth: '80px', fontSize: '0.875rem' }}
           >
             {d}
@@ -363,7 +365,7 @@ const App = () => {
                             fontSize: '0.8rem',
                             background: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent'),
                             borderColor: isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)'),
-                            color: 'white',
+                            color: (isCovered || isSelected) ? 'white' : 'var(--text-main)',
                             transition: 'all 0.3s ease'
                           }}
                         >
@@ -375,7 +377,7 @@ const App = () => {
                   <button
                     onClick={selectAllDay}
                     className="glass"
-                    style={{ width: '100%', padding: '0.4rem', fontSize: '0.8rem', background: periods.length === 8 ? 'var(--primary)' : 'rgba(255,255,255,0.05)' }}
+                    style={{ width: '100%', padding: '0.4rem', fontSize: '0.8rem', background: periods.length === 8 ? 'var(--primary)' : 'rgba(0,0,0,0.03)', color: periods.length === 8 ? 'white' : 'var(--text-main)' }}
                   >
                     Select All Day
                   </button>
@@ -425,7 +427,7 @@ const App = () => {
 
                   {suggestions && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <div className="glass" style={{ padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.03)', whiteSpace: 'pre-line', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                      <div className="glass" style={{ padding: '0.75rem', marginBottom: '0.75rem', background: 'rgba(43, 83, 196, 0.03)', whiteSpace: 'pre-line', fontSize: '0.75rem', lineHeight: '1.4' }}>
                         {suggestions}
                       </div>
                     </motion.div>
@@ -446,11 +448,11 @@ const App = () => {
                 {availableStaff.filter(s => s.name !== absentPerson).length > 0 ? (
                   availableStaff.filter(s => s.name !== absentPerson).map((s, i) => {
                     const isBusySpecialist = !s.is_free;
-                    let bgColor = 'rgba(255,255,255,0.03)';
+                    let bgColor = 'white';
                     let borderColor = 'var(--border)';
 
                     if (s.is_priority && s.is_free) {
-                      bgColor = 'rgba(99, 102, 241, 0.15)';
+                      bgColor = 'rgba(43, 83, 196, 0.08)';
                       borderColor = 'var(--primary)';
                     } else if (isBusySpecialist) {
                       bgColor = 'rgba(239, 68, 68, 0.15)';
@@ -509,7 +511,7 @@ const App = () => {
         {showSummary && (
           <div className="modal-overlay" onClick={() => setShowSummary(false)} style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.8)', zIndex: 2000,
+            background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(4px)', zIndex: 2000,
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
           }}>
             <motion.div
@@ -520,9 +522,9 @@ const App = () => {
               className="glass"
               style={{ width: '100%', maxWidth: '500px', padding: '2rem' }}
             >
-              <h2 style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--primary)' }}>
                 Cover Summary: {absentPerson}
-                <button onClick={() => setShowSummary(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.5rem' }}>×</button>
+                <button onClick={() => setShowSummary(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem' }}>×</button>
               </h2>
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
