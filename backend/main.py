@@ -7,9 +7,9 @@ from . import database
 from .database import engine, SessionLocal, Staff, Schedule, Absence, Cover, Setting
 from .calendar_service import CalendarService
 import pandas as pd
-import os
-
 from fastapi.middleware.cors import CORSMiddleware
+from .ai_agent import RotaAI
+import json
 
 app = FastAPI(title="Teacher Cover Rota API")
 
@@ -26,20 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/debug-cca")
-def debug_cca():
-    excel_path = r"c:\Users\rob_b\Rota\temp_rota.xlsx"
-    if not os.path.exists(excel_path):
-        return {"error": "File not found"}
-    wb = openpyxl.load_workbook(excel_path, data_only=True)
-    if "CCA" not in wb.sheetnames:
-        return {"error": "CCA sheet not found"}
-    sheet = wb["CCA"]
-    rows = []
-    for row in sheet.iter_rows(max_row=30, values_only=True):
-        rows.append([str(c) if c is not None else "" for c in row])
-    return {"rows": rows}
-
 try:
     database.Base.metadata.create_all(bind=engine)
 except Exception as e:
@@ -53,15 +39,41 @@ def get_db():
     finally:
         db.close()
 
+ai_assistant = RotaAI()
+
 @app.get("/")
 def read_root():
     return {"message": "Teacher Cover Rota API is running"}
 
+@app.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    return {
+        "staff_count": db.query(Staff).count(),
+        "absence_count": db.query(Absence).count(),
+        "cover_count": db.query(Cover).count()
+    }
+
+@app.get("/normalize-legacy")
+def trigger_normalize_legacy():
+    try:
+        from .normalize_legacy import normalize_legacy_absences
+        normalize_legacy_absences()
+        return {"status": "success", "message": "Legacy absences normalized."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/fix-duplicates")
+def trigger_fix_duplicates(db: Session = Depends(get_db)):
+    try:
+        from .fix_duplicates import run_merge_in_session
+        logs = run_merge_in_session(db)
+        return {"status": "success", "logs": logs}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/staff")
 def get_staff(db: Session = Depends(get_db)):
     return db.query(Staff).all()
-
-from sqlalchemy import func
 
 @app.post("/absences")
 def log_absence(staff_name: str, date: str, start_period: int, end_period: int, db: Session = Depends(get_db)):
@@ -71,14 +83,12 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int, 
     
     target_date = pd.to_datetime(date).date()
     
-    # Check for existing absence for this staff member on this date
     existing_absence = db.query(Absence).filter(
         Absence.staff_id == staff.id,
         Absence.date == target_date
     ).first()
     
     if existing_absence:
-        # Update periods if they changed, or just return existing
         existing_absence.start_period = start_period
         existing_absence.end_period = end_period
         db.commit()
@@ -96,11 +106,6 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int, 
     db.refresh(new_absence)
     return new_absence
 
-from .ai_agent import RotaAI
-import json
-
-ai_assistant = RotaAI()
-
 @app.get("/suggest-cover/{absence_id}")
 def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(get_db)):
     try:
@@ -109,15 +114,11 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
             raise HTTPException(status_code=404, detail="Absence not found")
         
         absent_staff = db.query(Staff).filter(Staff.id == absence.staff_id).first()
-        
-        # Get the absent teacher's schedule for this day to see which periods actually need cover
         absent_schedules = {sch.period: sch for sch in absent_staff.schedules if sch.day_of_week.lower() == day.lower()}
         
-        # Only suggest cover for periods where the teacher is NOT free
         all_range_periods = list(range(absence.start_period, absence.end_period + 1))
         target_periods = [p for p in all_range_periods if p in absent_schedules and not absent_schedules[p].is_free]
         
-        # Get all potential covering staff
         potential_staff = db.query(Staff).filter(Staff.is_active == True).all()
         available_profiles = []
         
@@ -125,19 +126,14 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
             if s.id == absent_staff.id:
                 continue
                 
-            # Get free periods from their schedule
             free_periods = [sch.period for sch in s.schedules if sch.is_free and sch.day_of_week.lower() == day.lower()]
-            
-            # Get busy periods from their schedule
             busy_periods = {sch.period: sch.activity for sch in s.schedules if not sch.is_free and sch.day_of_week.lower() == day.lower()}
 
-            # Remove periods where they have a calendar event, but keep track of what they are
             calendar_events = {}
             if s.calendar_url:
                 try:
                     target_dt = pd.to_datetime(absence.date).date()
                     calendar_events = CalendarService.get_busy_periods(s.calendar_url, target_dt)
-                    # Filter free_periods to only those truly free (no calendar event)
                     free_periods = [p for p in free_periods if p not in calendar_events]
                 except Exception:
                     pass
@@ -150,11 +146,10 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
                 "is_priority": s.is_priority,
                 "is_specialist": s.is_specialist,
                 "free_periods": free_periods,
-                "busy_periods": busy_periods, # Added this
+                "busy_periods": busy_periods,
                 "calendar_events": calendar_events
             })
 
-        # Call AI
         ai_response = ai_assistant.suggest_cover(
             absent_staff=absent_staff.name,
             day=day,
@@ -170,37 +165,26 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
             "suggestions": ai_response
         }
     except Exception as e:
-        print(f"Backend Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/availability")
 def check_availability(periods: str, day: str = "Monday", date: str = None, db: Session = Depends(get_db)):
     try:
         period_list = [int(p) for p in periods.split(',') if p]
-        
-        # Check if any requested period is a formal teaching period (1-8)
-        # Using 1-8 for periods. 
-        # We assume Duties are 0, 9, 10, 11, 13 or similar outside range.
         has_teaching_periods = any(1 <= p <= 8 for p in period_list)
         
         query = db.query(Staff).filter(Staff.is_active == True)
-        
         if has_teaching_periods:
-            # If any teaching period is selected, only show staff who can cover periods
             query = query.filter(Staff.can_cover_periods == True)
             
         staff = query.all()
         
-        # Use provided date or fallback to today
         if date:
             target_dt = pd.to_datetime(date).date()
         else:
             target_dt = pd.Timestamp.now().date()
             
         active_covers = db.query(Cover).join(Absence).filter(Absence.date == target_dt).all()
-        
-        # Organize covers by staff_id and period for quick lookup
-        # cover_map[staff_id][period] = "Name of person they are covering"
         cover_map = {}
         for c in active_covers:
             if c.covering_staff_id not in cover_map:
@@ -209,31 +193,22 @@ def check_availability(periods: str, day: str = "Monday", date: str = None, db: 
 
         results = []
         for s in staff:
-            # 1. Check their base timetable
             day_schedules = {sch.period: sch for sch in s.schedules if sch.day_of_week.lower() == day.lower()}
-            
-            # 2. check their "Live" covers
             staff_covers = cover_map.get(s.id, {})
             
-            # 3. Check their Outlook/ICS calendar
             calendar_busy = []
             if s.calendar_url:
-                calendar_busy = CalendarService.get_busy_periods(s.calendar_url, target_dt)
+                try:
+                    calendar_busy = CalendarService.get_busy_periods(s.calendar_url, target_dt)
+                except:
+                    pass
             
-            # Check if they are free in ALL requested periods
-            # They are free ONLY if: 
-            # (a) their schedule says they are free AND (b) they aren't already covering someone
             is_all_free = True
             first_busy_reason = None
 
             for p in period_list:
-                # check timetable
                 is_timetable_free = day_schedules.get(p) and day_schedules[p].is_free
-                
-                # check existing covers
                 who_covering = staff_covers.get(p)
-                
-                # check calendar
                 is_calendar_busy = p in calendar_busy
                 
                 if who_covering:
@@ -250,10 +225,7 @@ def check_availability(periods: str, day: str = "Monday", date: str = None, db: 
                     break
             
             if is_all_free:
-                # Determine display activity
                 display_activity = "Free"
-                # If they are a form teacher and have an activity, it's likely a specialist lesson (e.g. "6 RG Music")
-                # We can find the activity from the schedule
                 if not s.is_specialist:
                     reasons = []
                     for p in period_list:
@@ -272,7 +244,6 @@ def check_availability(periods: str, day: str = "Monday", date: str = None, db: 
                     "activity": display_activity
                 })
             elif s.is_specialist:
-                # Specialists always shown, but marked red if busy
                 results.append({
                     "name": s.name, 
                     "profile": s.profile, 
@@ -281,11 +252,8 @@ def check_availability(periods: str, day: str = "Monday", date: str = None, db: 
                     "is_free": False,
                     "activity": first_busy_reason
                 })
-            # Form teachers (not specialists) are hidden if busy
-            
         return results
     except Exception as e:
-        print(f"Availability Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/assign-cover")
@@ -367,13 +335,9 @@ def unassign_cover(absence_id: int, period: int, db: Session = Depends(get_db)):
 @app.get("/generate-report")
 def generate_report(query: str, db: Session = Depends(get_db)):
     try:
-        # Fetch data summaries
         absences = db.query(Absence).all()
         covers = db.query(Cover).all()
         
-        # Format data for AI context
-        # We limit the data to avoid hitting context limits, though Gemini Flash is large.
-        # Just sending the last 100 absences/covers should be enough for most reports.
         data_summary = "Staff Absences:\n"
         for a in absences[-1000:]:
             data_summary += f"- Staff: {a.staff.name}, Date: {a.date}, Periods: {a.start_period}-{a.end_period}\n"
@@ -385,9 +349,7 @@ def generate_report(query: str, db: Session = Depends(get_db)):
         report = ai_assistant.generate_report(query, data_summary)
         return {"report": report}
     except Exception as e:
-        print(f"Report API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 if __name__ == "__main__":
     import uvicorn

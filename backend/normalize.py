@@ -37,8 +37,8 @@ def clean_staff_name(name):
     
     # Fix Typos / Combine Duplicates
     if "jactina" in nl: return "Jacinta"
-    if "nokkaew" in nl: return "Nokkeaw"
-    if "nick" in nl and ("c" in nl or nl == "nick"): return "Nick.C" # Matches "Nick C", "Nick. C", "Nick"
+    if "nokkeaw" in nl: return "Nokkaew"
+    if "nick" in nl and ("c" in nl or nl == "nick"): return "Nick C" # Matches "Nick C", "Nick. C", "Nick"
     
     if nl == "darryl": return "Daryl"
     if nl == "ginny": return "Jinny"
@@ -75,7 +75,7 @@ def normalize_data():
             "Baitoey": "Teaching Assistant (Duty Only)",
             "Nop": "Teaching Assistant (Duty Only)",
             "Tum": "Teaching Assistant (Duty Only)",
-            "Nick.C": "Qualified Teacher (Duty + Periods)",
+            "Nick C": "Qualified Teacher (Duty + Periods)",
             "Kat": "Teaching Assistant (Duty Only)",
             "Mr Ben": "Qualified Teacher (Periods + Duties)",
             "Janel": "Teaching Assistant"
@@ -87,7 +87,7 @@ def normalize_data():
         # Identify specialists (non-form teachers)
         specialists_list = [
             "Daryl", "Becky", "Billy", "Jinny", "Ginny", "Ben", "Faye", 
-            "Claire", "Jake", "Retno", "Jacinta", "Sunny", "Mr Ben", "Nick.C"
+            "Claire", "Jake", "Retno", "Jacinta", "Sunny", "Mr Ben", "Nick C"
         ]
 
         for name in sheet_names:
@@ -370,7 +370,7 @@ def normalize_data():
                         
                         if not staff_obj:
                              # New staff found in Duty
-                             is_qts = map_name in ["Mr Ben", "Nick.C"]
+                             is_qts = map_name in ["Mr Ben", "Nick C"]
                              staff_obj = Staff(
                                  name=map_name,
                                  role="Teacher" if is_qts else "Duties Only",
@@ -496,16 +496,27 @@ def normalize_data():
         for s in all_staff:
             canon = clean_staff_name(s.name)
             if not canon: 
-                # Should have been deleted, but if here, delete now
+                print(f"Deleting ignored staff: {s.name}")
+                db.query(Schedule).filter(Schedule.staff_id == s.id).delete()
+                db.query(Absence).filter(Absence.staff_id == s.id).delete()
+                db.query(Cover).filter(Cover.covering_staff_id == s.id).delete()
                 db.delete(s)
                 continue
             
             if canon in seen:
-                # Duplicate! Merge schedules
+                # Duplicate! Merge schedules, absences, and covers
                 primary = seen[canon]
-                print(f"MERGING DUPLICATE: {s.name} (ID {s.id}) into {primary.name} (ID {primary.id})")
-                for sch in s.schedules:
-                    sch.staff_id = primary.id
+                print(f"MERGING DUPLICATE: {s.name} into {primary.name}")
+                
+                # Update Schedules
+                db.query(Schedule).filter(Schedule.staff_id == s.id).update({Schedule.staff_id: primary.id})
+                
+                # Update Absences
+                db.query(Absence).filter(Absence.staff_id == s.id).update({Absence.staff_id: primary.id})
+                
+                # Update Covers
+                db.query(Cover).filter(Cover.covering_staff_id == s.id).update({Cover.covering_staff_id: primary.id})
+                
                 db.delete(s)
             else:
                 seen[canon] = s
