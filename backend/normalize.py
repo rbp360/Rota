@@ -17,6 +17,16 @@ EXCEL_PATH = r"c:\Users\rob_b\Rota\temp_rota.xlsx"
 def clean_staff_name(name):
     if not name: return ""
     n = str(name).strip()
+    
+    # GLOBAL IGNORE LIST
+    IGNORED = [
+        "TBC", "External", "Coach", "Room", "Music Room", "Hall",
+        "Gym", "Pitch", "Court", "Pool", "Library", "PRE NURSERY", "PRE NUSERY", "Outside Prov.",
+        "**", "gate", "locked", "at", "8.30", "Mr", "1", "Calire", "?"
+    ]
+    if any(i.lower() in n.lower() for i in IGNORED):
+        return None
+
     # Remove "K.", "Kun ", "K " prefixes
     n = re.sub(r'^(k\.|kun\s|k\s)', '', n, flags=re.IGNORECASE).strip()
     # Remove brackets and content e.g. "Charlotte (Thu)" -> "Charlotte"
@@ -24,12 +34,16 @@ def clean_staff_name(name):
     
     # Common Mappings
     nl = n.lower()
-    if nl == "nick": return "Nick.C"
+    
+    # Fix Typos / Combine Duplicates
+    if "jactina" in nl: return "Jacinta"
+    if "nokkaew" in nl: return "Nokkeaw"
+    if "nick" in nl and ("c" in nl or nl == "nick"): return "Nick.C" # Matches "Nick C", "Nick. C", "Nick"
+    
     if nl == "darryl": return "Daryl"
     if nl == "ginny": return "Jinny"
-    if nl == "jinny": return "Jinny" # ensure consistency
+    if nl == "jinny": return "Jinny" 
     if nl == "janel": return "Janel"
-    if nl == "pre nursery": return "Retno"
     
     return n
 
@@ -87,6 +101,10 @@ def normalize_data():
                 continue
             
             staff_name = clean_staff_name(name)
+            if not staff_name: 
+                print(f"Skipping ignored sheet: {name}")
+                continue
+
             if name == "ME": staff_name = "Claire"
             
             print(f"--- Normalizing: {staff_name} ---")
@@ -95,7 +113,7 @@ def normalize_data():
             is_spec = (staff_name in specialists_list)
             can_cover = staff_name not in duty_only_staff
 
-            staff = db.query(Staff).filter(Staff.name == staff_name).first()
+            staff = db.query(Staff).filter(func.lower(Staff.name) == staff_name.lower()).first()
             if not staff:
                 staff = Staff(
                     name=staff_name,
@@ -187,8 +205,9 @@ def normalize_data():
         # Ensure all profile staff exist (for those without sheets)
         for p_name, p_desc in teacher_profiles.items():
              s_name = clean_staff_name(p_name)
+             if not s_name: continue
              
-             existing = db.query(Staff).filter(Staff.name == s_name).first()
+             existing = db.query(Staff).filter(func.lower(Staff.name) == s_name.lower()).first()
              if not existing:
                  can_cover = s_name not in duty_only_staff
                  staff = Staff(
@@ -439,6 +458,9 @@ def normalize_data():
                              
                              # FILTER: Ignore Secondary
                              if "(sec)" in raw_n.lower(): continue
+
+                             # FILTER: Explicit Ignore List (Now handled globally in clean_staff_name)
+                             # IGNORED_STAFF block removed
                              
                              # Find or Create
                              staff_obj = db.query(Staff).filter(func.lower(Staff.name) == clean_name.lower()).first()
@@ -466,6 +488,30 @@ def normalize_data():
                                  is_free=False
                              ))
                              print(f"    Assigned {clean_name} -> {cca_name} ({day})")
+
+        # Final Deduplication Safety Net
+        print("--- Final Deduplication Check ---")
+        all_staff = db.query(Staff).all()
+        seen = {} # canonical_name -> staff_obj
+        for s in all_staff:
+            canon = clean_staff_name(s.name)
+            if not canon: 
+                # Should have been deleted, but if here, delete now
+                db.delete(s)
+                continue
+            
+            if canon in seen:
+                # Duplicate! Merge schedules
+                primary = seen[canon]
+                print(f"MERGING DUPLICATE: {s.name} (ID {s.id}) into {primary.name} (ID {primary.id})")
+                for sch in s.schedules:
+                    sch.staff_id = primary.id
+                db.delete(s)
+            else:
+                seen[canon] = s
+                # Ensure name is canonical
+                if s.name != canon:
+                    s.name = canon
 
         db.commit()
         print("Normalization complete.")

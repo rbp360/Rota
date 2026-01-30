@@ -375,11 +375,11 @@ def generate_report(query: str, db: Session = Depends(get_db)):
         # We limit the data to avoid hitting context limits, though Gemini Flash is large.
         # Just sending the last 100 absences/covers should be enough for most reports.
         data_summary = "Staff Absences:\n"
-        for a in absences[-100:]:
+        for a in absences[-1000:]:
             data_summary += f"- Staff: {a.staff.name}, Date: {a.date}, Periods: {a.start_period}-{a.end_period}\n"
         
         data_summary += "\nCover Assignments:\n"
-        for c in covers[-100:]:
+        for c in covers[-1000:]:
              data_summary += f"- Covering Staff: {c.covering_staff.name}, Covered For: {c.absence.staff.name}, Date: {c.absence.date}, Period: {c.period}\n"
         
         report = ai_assistant.generate_report(query, data_summary)

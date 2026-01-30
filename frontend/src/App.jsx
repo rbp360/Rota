@@ -25,23 +25,38 @@ const App = () => {
   const [chatReport, setChatReport] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [absentSchedule, setAbsentSchedule] = useState([]);
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  useEffect(() => {
+    const today = new Date();
+    const day = today.getDay();
+    if (day === 0 || day === 6) {
+      setWeekOffset(1);
+    }
+  }, []);
 
 
   const API_URL = "http://127.0.0.1:8000";
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-  const getTargetDate = (dayName) => {
+  const getWeekMondayDate = (offset) => {
     const today = new Date();
-    const currentDayNum = today.getDay(); // 0 is Sunday, 1 is Monday...
-    const dayIndices = { 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5 };
-    const targetIndex = dayIndices[dayName];
+    const currentDay = today.getDay();
+    const diff = today.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+    const monday = new Date(today);
+    monday.setDate(diff);
+    monday.setDate(monday.getDate() + (offset * 7));
+    return monday;
+  };
 
-    // Calculate difference (assuming we want the date in the current week)
-    const diff = targetIndex - currentDayNum;
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + diff);
-    return targetDate.toISOString().split('T')[0];
+  const getTargetDate = (dayName) => {
+    const monday = getWeekMondayDate(weekOffset);
+    const dayIndices = { 'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4 };
+    const add = dayIndices[dayName] !== undefined ? dayIndices[dayName] : 0;
+    const target = new Date(monday);
+    target.setDate(monday.getDate() + add);
+    return target.toISOString().split('T')[0];
   };
 
   useEffect(() => {
@@ -72,7 +87,9 @@ const App = () => {
     const fetchStaff = async () => {
       try {
         const res = await axios.get(`${API_URL}/staff`);
-        setStaffList(res.data.map(s => s.name));
+        const ignore = ["TBC", "External", "Coach", "Room", "Music Room", "Hall", "Gym", "Pitch", "Court", "Pool", "Library", "PRE NURSERY", "PRE NUSERY", "Outside Prov.", "**", "gate", "locked", "at", "8.30", "Mr", "1", "Calire", "?", "Duty"];
+        const cleanList = res.data.map(s => s.name).filter(n => !ignore.some(i => n.toLowerCase().includes(i.toLowerCase())));
+        setStaffList(cleanList.sort());
       } catch (err) {
         console.error("Failed to fetch staff:", err);
       }
@@ -431,17 +448,54 @@ const App = () => {
         </div>
       </header>
 
-      <div className="glass" style={{ padding: '0.5rem', marginBottom: '1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-        {days.map(d => (
-          <button
-            key={d}
-            onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}
-            className={selectedDay === d ? 'btn-nav' : 'glass'}
-            style={{ padding: '0.4rem 1rem', flex: 1, minWidth: '80px', fontSize: '0.875rem' }}
-          >
-            {d}
-          </button>
-        ))}
+      <div className="glass" style={{ padding: '0.8rem', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 0.5rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Calendar size={16} />
+            Week Starting: {(() => {
+              const m = getWeekMondayDate(weekOffset);
+              return `${m.getDate()}/${m.getMonth() + 1}`;
+            })()}
+            {weekOffset === 0 ? " (Current)" : (weekOffset === 1 ? " (Next Week)" : ` (+${weekOffset} Weeks)`)}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>View Advance:</span>
+            <input
+              type="range"
+              min="0"
+              max="8"
+              value={weekOffset}
+              onChange={(e) => {
+                setWeekOffset(Number(e.target.value));
+                // Reset selections when changing week to avoid confusion
+                setCoveredPeriods([]);
+                setDetailedCovers({});
+                setCurrentAbsenceId(null);
+                setSuggestions(null);
+              }}
+              style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+          {days.map(d => {
+            const dateStr = getTargetDate(d);
+            const dateObj = new Date(dateStr);
+            const label = `${d} ${dateObj.getDate()}/${dateObj.getMonth() + 1}`;
+
+            return (
+              <button
+                key={d}
+                onClick={() => { setSelectedDay(d); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}
+                className={selectedDay === d ? 'btn-nav' : 'glass'}
+                style={{ padding: '0.4rem 1rem', flex: 1, minWidth: '80px', fontSize: '0.85rem' }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <main>
