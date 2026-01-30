@@ -430,33 +430,53 @@ const App = () => {
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Periods Absent</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem', marginBottom: '0.75rem' }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].map(p => {
                       const isCovered = coveredPeriods.includes(p);
                       const isSelected = periods.includes(p);
                       const scheduleItem = absentSchedule.find(s => s.period === p);
                       const isOriginallyFree = scheduleItem && scheduleItem.is_free;
 
+                      let label = `P${p}`;
+                      if (p === 0) label = "Morn";
+                      if (p === 9) label = "Lunch";
+                      if (p === 10) label = "AftSch";
+                      if (p === 11) label = "Break";
+                      if (p === 13) label = "CCA";
+
+                      // If absent person has a specific duty here, show it in title
+                      const title = scheduleItem && !scheduleItem.is_free ? scheduleItem.activity : `Period ${p}`;
+
+                      // Only show button if: 
+                      // 1. It is a teaching period (1-8)
+                      // 2. OR it is a non-teaching period AND the user has a duty/CCA there
+                      if ((p < 1 || p > 8) && (!scheduleItem || scheduleItem.is_free)) {
+                        // Skip irrelevant duty slots if they are free
+                        return null;
+                      }
+
                       return (
                         <button
                           key={p}
-                          onClick={() => !isOriginallyFree && handlePeriodClick(p)}
+                          onClick={() => (!isOriginallyFree || p > 8) && handlePeriodClick(p)} // Allow clicking duties even if technically "free" in schedule? No, rely on schedule.
                           className="glass"
-                          disabled={isOriginallyFree}
-                          title={isOriginallyFree ? `No cover needed: ${scheduleItem.activity}` : `Period ${p}`}
+                          disabled={isOriginallyFree && p <= 8}
+                          title={title}
                           style={{
                             padding: '0.4rem',
-                            fontSize: '0.8rem',
-                            background: isOriginallyFree ? 'rgba(0,0,0,0.05)' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent')),
-                            borderColor: isOriginallyFree ? 'transparent' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)')),
-                            color: isOriginallyFree ? 'var(--text-muted)' : ((isCovered || isSelected) ? 'white' : 'var(--text-main)'),
-                            cursor: isOriginallyFree ? 'not-allowed' : 'pointer',
-                            opacity: isOriginallyFree ? 0.6 : 1,
-                            textDecoration: isOriginallyFree ? 'line-through' : 'none',
-                            transition: 'all 0.3s ease'
+                            fontSize: '0.7rem',
+                            background: isOriginallyFree && p <= 8 ? 'rgba(0,0,0,0.05)' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'transparent')),
+                            borderWidth: '1px',
+                            borderStyle: (p === 0 || p > 8) ? 'dashed' : 'solid',
+                            borderColor: isOriginallyFree && p <= 8 ? 'transparent' : (isCovered ? 'var(--accent)' : (isSelected ? 'var(--primary)' : 'var(--border)')),
+                            color: isOriginallyFree && p <= 8 ? 'var(--text-muted)' : ((isCovered || isSelected) ? 'white' : 'var(--text-main)'),
+                            cursor: isOriginallyFree && p <= 8 ? 'not-allowed' : 'pointer',
+                            opacity: isOriginallyFree && p <= 8 ? 0.6 : 1,
+                            textDecoration: isOriginallyFree && p <= 8 ? 'line-through' : 'none',
+                            transition: 'all 0.3s ease',
                           }}
                         >
                           {isCovered ? <CheckCircle size={12} style={{ marginRight: '2px' }} /> : ''}
-                          P{p}
+                          {label}
                         </button>
                       );
                     })}
@@ -507,7 +527,15 @@ const App = () => {
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        style={{ width: '30px', height: '30px', border: '3px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }}
+                        style={{
+                          width: '30px',
+                          height: '30px',
+                          borderWidth: '3px',
+                          borderStyle: 'solid',
+                          borderColor: 'var(--border)',
+                          borderTopColor: 'var(--primary)',
+                          borderRadius: '50%'
+                        }}
                       />
                     </div>
                   )}

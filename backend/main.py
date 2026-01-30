@@ -3,22 +3,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from . import database
 from .database import engine, SessionLocal, Staff, Schedule, Absence, Cover, Setting
+from .calendar_service import CalendarService
 import pandas as pd
 import os
 
 from fastapi.middleware.cors import CORSMiddleware
 
-database.Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Teacher Cover Rota API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Temporarily broad to debug network issues
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+try:
+    database.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Database sync error: {e}")
 
 # Dependency
 def get_db():
@@ -100,15 +109,33 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
             if s.id == absent_staff.id:
                 continue
                 
-            # Filter schedules by the selected day
+            # Get free periods from their schedule
             free_periods = [sch.period for sch in s.schedules if sch.is_free and sch.day_of_week.lower() == day.lower()]
             
+            # Get busy periods from their schedule
+            busy_periods = {sch.period: sch.activity for sch in s.schedules if not sch.is_free and sch.day_of_week.lower() == day.lower()}
+
+            # Remove periods where they have a calendar event, but keep track of what they are
+            calendar_events = {}
+            if s.calendar_url:
+                try:
+                    target_dt = pd.to_datetime(absence.date).date()
+                    calendar_events = CalendarService.get_busy_periods(s.calendar_url, target_dt)
+                    # Filter free_periods to only those truly free (no calendar event)
+                    free_periods = [p for p in free_periods if p not in calendar_events]
+                except Exception:
+                    pass
+
             available_profiles.append({
                 "name": s.name,
+                "role": s.role,
+                "can_cover_periods": s.can_cover_periods,
                 "profile": s.profile,
                 "is_priority": s.is_priority,
                 "is_specialist": s.is_specialist,
-                "free_periods": free_periods
+                "free_periods": free_periods,
+                "busy_periods": busy_periods, # Added this
+                "calendar_events": calendar_events
             })
 
         # Call AI
@@ -131,15 +158,30 @@ def suggest_cover(absence_id: int, day: str = "Monday", db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/availability")
-def check_availability(periods: str, day: str = "Monday", db: Session = Depends(get_db)):
+def check_availability(periods: str, day: str = "Monday", date: str = None, db: Session = Depends(get_db)):
     try:
         period_list = [int(p) for p in periods.split(',') if p]
-        staff = db.query(Staff).filter(Staff.is_active == True).all()
         
-        # Fetch ALL covers for today to check if teachers are already busy covering others
-        # We assume "today" is the date of the absence we are managing
-        today = pd.Timestamp.now().date()
-        active_covers = db.query(Cover).join(Absence).filter(Absence.date == today).all()
+        # Check if any requested period is a formal teaching period (1-8)
+        # Using 1-8 for periods. 
+        # We assume Duties are 0, 9, 10, 11, 13 or similar outside range.
+        has_teaching_periods = any(1 <= p <= 8 for p in period_list)
+        
+        query = db.query(Staff).filter(Staff.is_active == True)
+        
+        if has_teaching_periods:
+            # If any teaching period is selected, only show staff who can cover periods
+            query = query.filter(Staff.can_cover_periods == True)
+            
+        staff = query.all()
+        
+        # Use provided date or fallback to today
+        if date:
+            target_dt = pd.to_datetime(date).date()
+        else:
+            target_dt = pd.Timestamp.now().date()
+            
+        active_covers = db.query(Cover).join(Absence).filter(Absence.date == target_dt).all()
         
         # Organize covers by staff_id and period for quick lookup
         # cover_map[staff_id][period] = "Name of person they are covering"
@@ -157,6 +199,11 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
             # 2. check their "Live" covers
             staff_covers = cover_map.get(s.id, {})
             
+            # 3. Check their Outlook/ICS calendar
+            calendar_busy = []
+            if s.calendar_url:
+                calendar_busy = CalendarService.get_busy_periods(s.calendar_url, target_dt)
+            
             # Check if they are free in ALL requested periods
             # They are free ONLY if: 
             # (a) their schedule says they are free AND (b) they aren't already covering someone
@@ -170,9 +217,16 @@ def check_availability(periods: str, day: str = "Monday", db: Session = Depends(
                 # check existing covers
                 who_covering = staff_covers.get(p)
                 
+                # check calendar
+                is_calendar_busy = p in calendar_busy
+                
                 if who_covering:
                     is_all_free = False
                     first_busy_reason = f"Covering {who_covering}"
+                    break
+                elif is_calendar_busy:
+                    is_all_free = False
+                    first_busy_reason = calendar_busy[p]
                     break
                 elif not is_timetable_free:
                     is_all_free = False

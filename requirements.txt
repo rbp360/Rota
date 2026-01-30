@@ -5,3 +5,6 @@ pandas
 openpyxl
 python-dotenv
 google-generativeai
+requests
+icalendar
+recurring-ical-events

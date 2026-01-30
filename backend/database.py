@@ -19,6 +19,8 @@ class Staff(Base):
     is_priority = Column(Boolean, default=False)
     is_specialist = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+    can_cover_periods = Column(Boolean, default=True) # If False, can only do Duties
+    calendar_url = Column(String, nullable=True) # URL to .ics file
 
     schedules = relationship("Schedule", back_populates="staff")
     absences = relationship("Absence", back_populates="staff")
