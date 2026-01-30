@@ -377,82 +377,95 @@ def normalize_data():
 
         # Process CCA Sheet
         if "CCA" in wb.sheetnames:
-            print("--- Processing CCA ---")
+            print("--- Processing CCA (Smart Pairing) ---")
             sheet = wb["CCA"]
             
-            # Find Day Columns (standard header scan)
-            day_cols = {}
+            # 1. Identify Day Columns and Header Row
+            day_cols_map = {} # day -> { 'act_col': idx, 'staff_col': idx }
             header_row_idx = None
             
+            # Scan top 20 rows for "Monday", "Tuesday" etc.
             for r_idx, row in enumerate(sheet.iter_rows(max_row=20, values_only=True)):
-                row_str = [str(c).lower() for c in row if c]
-                if "monday" in row_str:
+                row_vals = [str(c).lower() if c else "" for c in row]
+                found_days = []
+                for d in days_list:
+                    if d.lower() in row_vals:
+                        found_days.append(d)
+                
+                if found_days:
                     header_row_idx = r_idx + 1
-                    for c_idx, val in enumerate(row):
-                        if not val: continue
-                        val_str = str(val).strip().lower()
-                        for d in days_list:
-                            if d.lower() in val_str:
-                                day_cols[d] = c_idx + 1
+                    # Map Day name to the pair of columns
+                    # User: "Club names appear in the columns first and the teachers second"
+                    # We look for the day name. If it's found at idx, 
+                    # then idx is usually the Activity and idx+1 is Staff.
+                    for d in found_days:
+                        c_idx = row_vals.index(d.lower())
+                        day_cols_map[d] = {
+                            'act_col': c_idx,
+                            'staff_col': c_idx + 1
+                        }
                     break
             
-            # If no header found, make a best guess or skip
-            if not day_cols:
+            if not day_cols_map:
                  print("  Could not find day headers in CCA tab.")
             else:
-                 print(f"  CCA Day Columns: {day_cols}")
-                 
-                 # Iterate CCA rows
-                 for r_idx, row in enumerate(sheet.iter_rows(min_row=header_row_idx+1, values_only=True)):
-                     if not row or all(c is None for c in row): continue
+                 print(f"  Detected CCA Mapping: {day_cols_map}")
+                 # Iterate CCA data rows
+                 for row_idx, row in enumerate(sheet.iter_rows(min_row=header_row_idx+1, values_only=True)):
+                     if not any(row): continue
                      
-                     # Assuming Activity Name is in Col A or B?
-                     # Let's assume Col A (idx 0) is the Activity Name based on "Drone Club" example
-                     cca_name = str(row[0]).strip() if row[0] else "CCA"
-                     if not cca_name: cca_name = "CCA"
-                     
-                     # Iterate Day Columns
-                     for day, col_idx in day_cols.items():
-                         if col_idx > len(row): continue
-                         cell_val = row[col_idx-1]
-                         if not cell_val: continue
+                     for day, col_cfg in day_cols_map.items():
+                         a_idx = col_cfg['act_col']
+                         s_idx = col_cfg['staff_col']
                          
-                         val_str = str(cell_val).strip()
-                         if val_str.lower() in ['none', 'nan', '']: continue
+                         if s_idx >= len(row): continue
                          
-                         # Split by separators: "+", "=", "\n"
-                         # User mentioned "=" for Glee Club
-                         raw_names = re.split(r'[+=\n]', val_str)
+                         raw_cca = row[a_idx]
+                         raw_staff = row[s_idx]
+                         
+                         if not raw_staff or str(raw_staff).lower() in ['none', 'nan', '']: 
+                             continue
+                         
+                         # Activity name comes from the first column of the pair
+                         cca_name = str(raw_cca).strip() if raw_cca else "CCA"
+                         staff_names_str = str(raw_staff).strip()
+                         
+                         # Split multiple staff in a cell
+                         raw_names = re.split(r'[+=\n&]', staff_names_str)
                          
                          for raw_n in raw_names:
                              clean_name = clean_staff_name(raw_n)
                              if not clean_name: continue
                              
-                             # FILTER 1: Ignore Secondary staff (Sec)
-                             if "(sec)" in raw_n.lower():
-                                 continue
+                             # FILTER: Ignore Secondary
+                             if "(sec)" in raw_n.lower(): continue
                              
-                             # FILTER 2: STRICTLY EXISTING STAFF ONLY
+                             # Find or Create
                              staff_obj = db.query(Staff).filter(func.lower(Staff.name) == clean_name.lower()).first()
                              
-                             if staff_obj:
-                                 # Found existing staff
-                                 # Assign CCA Period (Period 13 to separate from Duties/Lessons?)
-                                 # Or just append to "Duty" checks? 
-                                 # User said "end of the day". Let's use Period 13.
-                                 # We need to make sure this period is checked during availability.
-                                 
-                                 db.add(Schedule(
-                                     staff_id=staff_obj.id,
-                                     day_of_week=day,
-                                     period=13, # CCA Period
-                                     activity=f"CCA: {cca_name}",
-                                     is_free=False
-                                 ))
-                                 print(f"  Assigned CCA '{cca_name}' to {staff_obj.name} on {day}")
-                             else:
-                                 # Ignore new staff ("Ben P", "Gideon" etc)
-                                 pass
+                             if not staff_obj:
+                                 # This is a new staff member found only in CCA
+                                 staff_obj = Staff(
+                                     name=clean_name,
+                                     role="TA (from CCA)",
+                                     profile="Added from CCA Rota",
+                                     is_active=True,
+                                     is_specialist=False,
+                                     can_cover_periods=False
+                                 )
+                                 db.add(staff_obj)
+                                 db.flush()
+                                 print(f"    New Staff from CCA: {clean_name}")
+                             
+                             # Add the CCA to their schedule
+                             db.add(Schedule(
+                                 staff_id=staff_obj.id,
+                                 day_of_week=day,
+                                 period=13, # CCA Period
+                                 activity=f"CCA: {cca_name}",
+                                 is_free=False
+                             ))
+                             print(f"    Assigned {clean_name} -> {cca_name} ({day})")
 
         db.commit()
         print("Normalization complete.")

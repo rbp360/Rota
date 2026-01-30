@@ -336,32 +336,65 @@ const App = () => {
                 </p>
 
                 {/* Visual Strip */}
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '1.5rem' }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
-                    <div key={p} style={{
-                      flex: 1,
-                      height: '10px',
-                      background: coveredPeriods.includes(p) ? 'var(--accent)' : 'var(--danger)',
-                      borderRadius: '2px',
-                      opacity: coveredPeriods.includes(p) ? 1 : 0.6
-                    }} title={`Period ${p}: ${detailedCovers[p] || 'Uncovered'}`} />
-                  ))}
+                <div style={{ display: 'flex', gap: '3px', marginBottom: '1rem' }}>
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].map(p => {
+                    const sch = absentSchedule.find(s => s.period === p);
+                    if ((p < 1 || p > 8) && (!sch || sch.is_free)) return null;
+
+                    return (
+                      <div key={p} style={{
+                        flex: 1,
+                        height: '10px',
+                        background: coveredPeriods.includes(p) ? 'var(--accent)' : 'var(--danger)',
+                        borderRadius: '2px',
+                        opacity: coveredPeriods.includes(p) ? 1 : 0.6
+                      }} title={`${p === 0 ? 'Morn' : (p === 9 ? 'Lunch' : (p === 10 ? 'Aft' : (p === 11 ? 'Break' : (p === 13 ? 'CCA' : `Period ${p}`))))}: ${detailedCovers[p] || 'Uncovered'}`} />
+                    );
+                  })}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
                   {(() => {
-                    const allPeriods = [1, 2, 3, 4, 5, 6, 7, 8];
-                    let currentStaff = detailedCovers[1] || null;
-                    let start = 1;
-                    let summaryParts = [];
+                    const activePeriods = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].filter(p => {
+                      const sch = absentSchedule.find(s => s.period === p);
+                      return (p >= 1 && p <= 8) || (sch && !sch.is_free);
+                    }).sort((a, b) => a - b);
 
-                    for (let p = 2; p <= 9; p++) {
+                    if (activePeriods.length === 0) return null;
+
+                    let summaryParts = [];
+                    let currentStaff = detailedCovers[activePeriods[0]] || null;
+                    let rangeStartIdx = 0;
+
+                    for (let i = 1; i <= activePeriods.length; i++) {
+                      const p = activePeriods[i];
                       const staff = detailedCovers[p] || null;
-                      if (staff !== currentStaff || p === 9) {
-                        const range = start === p - 1 ? `P${start}` : `P${start}-${p - 1}`;
+
+                      // Split if staff changes OR if there is a gap in periods OR end of list
+                      const isEnd = i === activePeriods.length;
+                      const isGap = !isEnd && (activePeriods[i] !== activePeriods[i - 1] + 1);
+                      const isStaffChange = !isEnd && staff !== currentStaff;
+
+                      if (isEnd || isGap || isStaffChange) {
+                        const startP = activePeriods[rangeStartIdx];
+                        const endP = activePeriods[i - 1];
+
+                        const formatP = (num) => {
+                          if (num === 0) return "Morn";
+                          if (num === 9) return "Lunch";
+                          if (num === 10) return "Aft";
+                          if (num === 11) return "Break";
+                          if (num === 13) return "CCA";
+                          return `P${num}`;
+                        };
+
+                        const range = startP === endP ? formatP(startP) : `${formatP(startP)}-${formatP(endP)}`;
                         summaryParts.push({ range, staff: currentStaff });
-                        start = p;
-                        currentStaff = staff;
+
+                        if (!isEnd) {
+                          rangeStartIdx = i;
+                          currentStaff = staff;
+                        }
                       }
                     }
 

@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException
+import openpyxl
+import os
+from fastapi import FastAPI, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from . import database
@@ -14,7 +16,7 @@ app = FastAPI(title="Teacher Cover Rota API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173", 
+        "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000"
@@ -23,6 +25,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/debug-cca")
+def debug_cca():
+    excel_path = r"c:\Users\rob_b\Rota\temp_rota.xlsx"
+    if not os.path.exists(excel_path):
+        return {"error": "File not found"}
+    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    if "CCA" not in wb.sheetnames:
+        return {"error": "CCA sheet not found"}
+    sheet = wb["CCA"]
+    rows = []
+    for row in sheet.iter_rows(max_row=30, values_only=True):
+        rows.append([str(c) if c is not None else "" for c in row])
+    return {"rows": rows}
 
 try:
     database.Base.metadata.create_all(bind=engine)
