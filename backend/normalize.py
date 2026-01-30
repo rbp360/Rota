@@ -2,6 +2,7 @@ import pandas as pd
 import openpyxl
 import sys
 import os
+import re
 
 # Allow running directly as a script
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,6 +13,25 @@ from sqlalchemy import func
 
 
 EXCEL_PATH = r"c:\Users\rob_b\Rota\temp_rota.xlsx"
+
+def clean_staff_name(name):
+    if not name: return ""
+    n = str(name).strip()
+    # Remove "K.", "Kun ", "K " prefixes
+    n = re.sub(r'^(k\.|kun\s|k\s)', '', n, flags=re.IGNORECASE).strip()
+    # Remove brackets and content e.g. "Charlotte (Thu)" -> "Charlotte"
+    n = n.split('(')[0].strip()
+    
+    # Common Mappings
+    nl = n.lower()
+    if nl == "nick": return "Nick.C"
+    if nl == "darryl": return "Daryl"
+    if nl == "ginny": return "Jinny"
+    if nl == "jinny": return "Jinny" # ensure consistency
+    if nl == "janel": return "Janel"
+    if nl == "pre nursery": return "Retno"
+    
+    return n
 
 def normalize_data():
     db = SessionLocal()
@@ -48,13 +68,7 @@ def normalize_data():
         }
 
         # Staff with full period cover capability (Qualified Teachers)
-        # Assuming most from sheet_names are teachers, but we need to restrict new ones.
-        # Explicitly list who CANNOT do periods (TAs)
         duty_only_staff = ["Baitoey", "Nop", "Tum", "Kat", "Janel"]
-
-        # Exceptions and Aliases
-        # Nick -> Nick.C handled by checking normalized name? 
-        # User says "Nick (Nick.C)" - likely means "Nick" in sheet maps to "Nick.C"
         
         # Identify specialists (non-form teachers)
         specialists_list = [
@@ -69,34 +83,18 @@ def normalize_data():
                 'instructions', 'summary', 'record', 'absencerecord', 
                 'sheet3', 'sheet1', 'cca', 'y56eal'
             ]
-            # remove 'tb1', 'ey' from ignore list if we want to process them separately, 
-            # but here we loop for STAFF sheets.
             if name_lower in ignore_list or name_lower.startswith('sheet') or name_lower in ['tb1', 'ey']:
                 continue
             
-            staff_name = name
+            staff_name = clean_staff_name(name)
             if name == "ME": staff_name = "Claire"
-            if name.lower() == "pre nursery": staff_name = "Retno"
             
-            # Name Normalization
-            if staff_name.lower() == "nick": staff_name = "Nick.C"
-            if staff_name.lower() == "janel": staff_name = "Janel" # Ensure case
-
-
             print(f"--- Normalizing: {staff_name} ---")
             sheet = wb[name]
             
-            # Explicitly force is_specialist to match the list exactly, else False (0)
             is_spec = (staff_name in specialists_list)
-            
-            # Check if they can cover periods
             can_cover = staff_name not in duty_only_staff
 
-            
-            # Handle Mr Ben vs Ben
-            # If sheet name is "Ben", it is Ben (Forest School).
-            # If user refers to "Mr Ben", we need to ensure he exists.
-            
             staff = db.query(Staff).filter(Staff.name == staff_name).first()
             if not staff:
                 staff = Staff(
@@ -188,9 +186,7 @@ def normalize_data():
         
         # Ensure all profile staff exist (for those without sheets)
         for p_name, p_desc in teacher_profiles.items():
-             # Normalize name
-             s_name = p_name
-             if s_name.lower() == "nick": s_name = "Nick.C"
+             s_name = clean_staff_name(p_name)
              
              existing = db.query(Staff).filter(Staff.name == s_name).first()
              if not existing:
@@ -200,12 +196,12 @@ def normalize_data():
                     role="TA" if "Assistant" in p_desc or s_name in duty_only_staff else "Teacher",
                     profile=p_desc,
                     is_priority=(s_name == "Claire"),
-                    is_specialist=(s_name in specialists_list), # specialists_list needs to be accessible
+                    is_specialist=(s_name in specialists_list),
                     is_active=True,
                     can_cover_periods=can_cover
                  )
                  db.add(staff)
-                 print(f"Added missing staff: {s_name}")
+                 print(f"Added missing profile staff: {s_name}")
         
         db.commit()
 
@@ -340,27 +336,15 @@ def normalize_data():
 
                     else:
                         # Simple cell (just names)
-                        # Split by space if multiple? OR assuming one per line?
-                        # User snippet: "K.Soe"
-                        # But could be "K.Soe Baitoey"
-                        names = re.split(r'[+\n&,]', val_str)
+                        names = re.split(r'[+\n&,\s]', val_str) # Added space to splitters
                         for n in names:
                             n = n.strip()
                             if n: target_staff_names.append(n)
                     
                     # Register Staff and Assignments
                     for raw_name in target_staff_names:
-                        s_name = raw_name.strip()
-                        # Clean up punctuation
-                        s_name = s_name.replace(".", "") # "Nick.C" -> "NickC"? No "Nick.C" is the name.
-                        # Wait, "Nick.C" is valid. "K.Soe".
-                        # Maybe just remove trailing/leading non-alphanumeric?
-                        
-                        # Mapping check
-                        map_name = s_name
-                        if s_name.lower() == "nick": map_name = "Nick.C"
-                        if s_name.lower() == "darryl": map_name = "Daryl" # typo fix
-                        if s_name.lower() == "ginny": map_name = "Jinny"
+                        map_name = clean_staff_name(raw_name)
+                        if not map_name: continue
                         
                         # Find or Create
                         staff_obj = db.query(Staff).filter(func.lower(Staff.name) == map_name.lower()).first()
@@ -438,28 +422,15 @@ def normalize_data():
                          
                          # Split by separators: "+", "=", "\n"
                          # User mentioned "=" for Glee Club
-                         import re
                          raw_names = re.split(r'[+=\n]', val_str)
                          
                          for raw_n in raw_names:
-                             n = raw_n.strip()
-                             if not n: continue
+                             clean_name = clean_staff_name(raw_n)
+                             if not clean_name: continue
                              
                              # FILTER 1: Ignore Secondary staff (Sec)
-                             if "(sec)" in n.lower():
+                             if "(sec)" in raw_n.lower():
                                  continue
-                             
-                             # CLEAN: Remove "K." or "Kun" prefix
-                             # Regex: start of string, optional "k" or "kun" followed by dot or space
-                             clean_name = re.sub(r'^(k\.|kun\s|k\s)', '', n, flags=re.IGNORECASE).strip()
-                             
-                             # Also remove specific day markers if inside the string e.g. "Claire (Tue)" -> "Claire"
-                             # (Reusing logic from Duties might be safer, but let's just strip brackets for now)
-                             clean_name = clean_name.split('(')[0].strip()
-                             
-                             # MAPPING
-                             if clean_name.lower() == "nick": clean_name = "Nick.C"
-                             if clean_name.lower() == "darryl": clean_name = "Daryl"
                              
                              # FILTER 2: STRICTLY EXISTING STAFF ONLY
                              staff_obj = db.query(Staff).filter(func.lower(Staff.name) == clean_name.lower()).first()
