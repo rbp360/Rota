@@ -1,14 +1,13 @@
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from http.server import BaseHTTPRequestHandler
+import json
 
-app = FastAPI()
-
-@app.get("/api/health")
-async def health():
-    return {"status": "minimal_start_working"}
-
-@app.get("/api/{path:path}")
-async def catch_all(path: str):
-    return {"message": "Minimal API is alive", "path": path}
-
-app = app
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "ready",
+            "message": "Pure Python CGI handler is working"
+        }).encode())
+        return
