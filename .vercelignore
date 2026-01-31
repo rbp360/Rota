@@ -9,20 +9,18 @@
 *.pyc
 __pycache__/
 
-# Exclude all top-level Python tools
+# Exclude all top-level Python tools (not needed for deployment)
 /*.py
 !/api/
 !/backend/
 
-# Folders
-.git/
+# Essential Folders (Keep these for the build)
+# .git/ is ignored by default
 .vercel/
 .firebase/
 node_modules/
+# Do NOT ignore frontend/src or frontend/public, Vite needs them!
 frontend/node_modules/
-frontend/src/
-frontend/public/
-frontend/dist/
 
 # Configuration
 package-lock.json
