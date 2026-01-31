@@ -1,65 +1,66 @@
 import os
 import sys
 import traceback
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-# Fix paths immediately
+# Create the app instance immediately so Vercel sees it
+app = FastAPI()
+
+# Add the project root to path
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
 
-# Try to import FastAPI first (if this fails, the function won't work anyway)
-try:
-    from fastapi import FastAPI
-    from fastapi.responses import JSONResponse
-except ImportError as e:
-    # This should never happen if requirements.txt is correct
-    raise e
+# STANDALONE HEALTH CHECK (No dependencies)
+@app.get("/api/health")
+async def health():
+    return {
+        "status": "ready",
+        "env": "vercel" if os.getenv("VERCEL") else "local",
+        "python": sys.version,
+        "root": root_dir
+    }
 
-app = None
-init_error = None
-init_stack = None
+# LAZY BACKEND LOADING
+# This captures every other request and only THEN tries to load the backend
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_to_backend(request: Request, path: str):
+    try:
+        # We import inside the handler so the worker starts up first!
+        from backend.main_firestore import app as backend_app
+        
+        # Manually route the request to the backend_app
+        # This is a simple 'middleware' approach
+        scope = request.scope
+        # Update the path to what the backend expects (without the prefix if needed)
+        # However, backend_app likely has routes defined as /api/...
+        
+        # Use the backend_app to handle the request
+        async def receive():
+            return await request.receive()
+            
+        async def send(message):
+            # This is a bit complex for a proxy, so let's try a simpler approach first:
+            # Just import and replace the handler if we can, but since FastAPI is already running
+            # We will just call the backend logic directly or report the error.
+            pass
 
-try:
-    # Attempt to import the actual backend
-    from backend.main_firestore import app as backend_app
-    app = backend_app
-except Exception as e:
-    init_error = str(e)
-    init_stack = traceback.format_exc()
+        # For diagnostic purposes, if we get here, the backend LOADED.
+        # Let's just return a success message for now to confirm loading works.
+        return {"status": "backend_loaded", "target_path": path}
 
-# If backend failed to load, create a fallback app to report the error
-if app is None:
-    app = FastAPI()
-    
-    @app.get("/api/health")
-    async def health():
-        return {
-            "status": "initialization_failed",
-            "error": init_error,
-            "trace": init_stack,
-            "path": sys.path
-        }
-
-    @app.get("/api/{path:path}")
-    async def catch_all(path: str):
+    except Exception as e:
         return JSONResponse(
             status_code=500,
             content={
-                "error": "Backend Loading Error",
-                "message": init_error,
-                "trace": init_stack
+                "error": "Lazy Backend Loading Failed",
+                "message": str(e),
+                "trace": traceback.format_exc(),
+                "cwd": os.getcwd(),
+                "files": os.listdir(root_dir) if os.path.exists(root_dir) else "unknown"
             }
         )
-else:
-    # Backend loaded successfully!
-    # Ensure a health check exists
-    try:
-        @app.get("/api/health")
-        async def health():
-            return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
-    except:
-        # Route might already exist
-        pass
 
-# Ensure 'app' is available for Vercel
+# Ensure 'app' is at the top level for Vercel
 app = app
