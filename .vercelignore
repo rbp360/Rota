@@ -1,4 +1,4 @@
-# Exclude large data files from the deployment
+# Exclude large data and tool files
 *.xlsx
 *.db
 *.ics
@@ -6,13 +6,21 @@
 !requirements.txt
 !runtime.txt
 *.md
-Dockerfile
-vercel_import.env
-rotaai-49847-firebase-adminsdk-*.json
 
-# Ignore node_modules, they are managed by Vercel
+# Exclude all top-level Python tools (not needed for API)
+/*.py
+!/api/
+!/backend/
+
+# Folders
+.git/
+.vercel/
+.firebase/
 node_modules/
 frontend/node_modules/
+frontend/src/
+frontend/public/
+frontend/dist/
 
-# We NEED the frontend folder during build, so don't ignore the whole folder!
-# Vercel's build handles the separation of "static files" vs "serverless functions"
+# We only need api/ and backend/ for the serverless function.
+# The frontend static files are served separately by Vercel from the output directory.
