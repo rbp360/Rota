@@ -1,27 +1,29 @@
+# Secrets (NEVER PUSH THESE)
 .env
+.env.local
 *.env
-# Secret files MUST NOT be pushed
-rotaai-49847-firebase-adminsdk-*.json
+*.json
+!package.json
+!vercel.json
 
-# Ignore LARGE binary data files that bloat the Vercel function size
-GV cover and staff absence.xlsx
-temp_rota.xlsx
-rota.db
-reachcalendar.ics
-Cover.txt
-staff_audit.txt
+# Large Data & Binaries (Fixes the 250MB limit)
 *.xlsx
 *.db
 *.ics
+*.txt
+*.md
+rota.db
+reachcalendar.ics
+GV*.xlsx
+temp_rota.xlsx
 
-# Dependencies and Builds
+# Dependencies
 node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
-dist_root/
-public/
 __pycache__/
 *.pyc
 .vercel
 .firebase
+fix_git.bat

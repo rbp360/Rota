@@ -1,35 +1,35 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 import sys
 import os
 import traceback
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-# Add the project root to the path so we can find the 'backend' folder
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# Add the root directory to sys.path so we can find the 'backend' folder
+# When running on Vercel, the current file is in /api/index.py
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
 
 try:
     from backend.main_firestore import app
 except Exception as e:
-    # If the app fails to import, create a dummy app to report the error
+    # If the backend fails to load, create a reporter app
     app = FastAPI()
-    error_msg = str(e)
-    stack_trace = traceback.format_exc()
-    
+    error_detail = str(e)
+    error_stack = traceback.format_exc()
+
     @app.get("/api/{path:path}")
-    async def report_error(path: str):
+    async def report_crash(path: str):
         return JSONResponse(
             status_code=500,
             content={
-                "error": "Backend Initialization Failed",
-                "detail": error_msg,
-                "trace": stack_trace if os.getenv("VERCEL") else "Check logs"
+                "error": "Initialization Failed",
+                "message": error_detail,
+                "stack": error_stack,
+                "current_dir": os.getcwd(),
+                "sys_path": sys.path
             }
         )
 
-# Add a health check at the very top level
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
-
-# Vercel needs the 'app' object
+# Identity for Vercel
 app = app
