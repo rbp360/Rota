@@ -1,4 +1,3 @@
-# Deploy Trigger: Ensuring environment variables are updated
 from fastapi import FastAPI, Depends, HTTPException, Query
 from .database_firestore import FirestoreDB
 from .calendar_service import CalendarService
