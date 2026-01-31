@@ -5,33 +5,55 @@ from datetime import datetime
 
 import json
 
-# Initialize Firestore
-if not firebase_admin._apps:
-    # 1. Try to load from "FIREBASE_SERVICE_ACCOUNT" environment variable (for Vercel)
-    service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
-    
-    if service_account_info:
-        try:
-            info = json.loads(service_account_info)
-            cred = credentials.Certificate(info)
-            firebase_admin.initialize_app(cred)
-        except Exception as e:
-            print(f"Error loading FIREBASE_SERVICE_ACCOUNT env: {e}")
-    
-    # 2. Fallback to local file if not already initialized
-    if not firebase_admin._apps:
-        SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
-        if os.path.exists(SERVICE_ACCOUNT_PATH):
-            cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-            firebase_admin.initialize_app(cred)
-        else:
-            print("WARNING: No Firebase credentials found!")
+# Global variable for the firestore client
+_db = None
 
-db = firestore.client()
+def get_db():
+    global _db
+    if _db is not None:
+        return _db
+        
+    if not firebase_admin._apps:
+        # 1. Try to load from "FIREBASE_SERVICE_ACCOUNT" environment variable
+        service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+        
+        if service_account_info:
+            try:
+                info = json.loads(service_account_info)
+                cred = credentials.Certificate(info)
+                firebase_admin.initialize_app(cred)
+            except Exception as e:
+                print(f"Error loading FIREBASE_SERVICE_ACCOUNT env: {e}")
+        
+        # 2. Try Default Application Credentials (useful if running in Google Cloud environment)
+        if not firebase_admin._apps:
+            try:
+                firebase_admin.initialize_app()
+            except:
+                pass
+
+        # 3. Fallback to local file if not already initialized
+        if not firebase_admin._apps:
+            SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
+            if os.path.exists(SERVICE_ACCOUNT_PATH):
+                try:
+                    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+                    firebase_admin.initialize_app(cred)
+                except Exception as e:
+                    print(f"Error loading local service account: {e}")
+    
+    try:
+        _db = firestore.client()
+        return _db
+    except Exception as e:
+        print(f"CRITICAL: Could not initialize Firestore client: {e}")
+        return None
 
 class FirestoreDB:
     @staticmethod
     def get_staff():
+        db = get_db()
+        if not db: return []
         docs = db.collection("staff").stream()
         staff_list = []
         for doc in docs:
@@ -42,6 +64,8 @@ class FirestoreDB:
 
     @staticmethod
     def get_staff_member(staff_id=None, name=None):
+        db = get_db()
+        if not db: return None
         if staff_id:
             doc = db.collection("staff").document(staff_id).get()
             if doc.exists:
@@ -58,6 +82,8 @@ class FirestoreDB:
 
     @staticmethod
     def get_schedules(staff_id, day=None):
+        db = get_db()
+        if not db: return []
         query = db.collection("staff").document(staff_id).collection("schedules")
         if day:
             query = query.where("day_of_week", "==", day)
@@ -70,6 +96,8 @@ class FirestoreDB:
 
     @staticmethod
     def add_absence(staff_id, staff_name, date, start_period, end_period):
+        db = get_db()
+        if not db: return None
         # date should be string "YYYY-MM-DD"
         absence_ref = db.collection("absences").document()
         absence_data = {
@@ -85,6 +113,8 @@ class FirestoreDB:
 
     @staticmethod
     def get_absences(date=None, staff_id=None):
+        db = get_db()
+        if not db: return []
         query = db.collection("absences")
         if date:
             query = query.where("date", "==", date)
@@ -104,6 +134,8 @@ class FirestoreDB:
 
     @staticmethod
     def assign_cover(absence_id, staff_id, staff_name, period):
+        db = get_db()
+        if not db: return False
         cover_ref = db.collection("absences").document(absence_id).collection("covers").document(str(period))
         cover_data = {
             "covering_staff_id": staff_id,
@@ -116,5 +148,7 @@ class FirestoreDB:
 
     @staticmethod
     def unassign_cover(absence_id, period):
+        db = get_db()
+        if not db: return False
         db.collection("absences").document(absence_id).collection("covers").document(str(period)).delete()
         return True
