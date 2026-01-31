@@ -6,8 +6,10 @@
 !requirements.txt
 !runtime.txt
 *.md
+*.pyc
+__pycache__/
 
-# Exclude all top-level Python tools (not needed for API)
+# Exclude all top-level Python tools
 /*.py
 !/api/
 !/backend/
@@ -22,5 +24,6 @@ frontend/src/
 frontend/public/
 frontend/dist/
 
-# We only need api/ and backend/ for the serverless function.
-# The frontend static files are served separately by Vercel from the output directory.
+# Configuration
+package-lock.json
+frontend/package-lock.json
