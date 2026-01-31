@@ -20,10 +20,8 @@ app.add_middleware(
 
 ai_assistant = RotaAI()
 
-@app.get("/")
-def read_root():
-    return {"message": "Teacher Cover Rota API (Firestore) is running"}
 
+# API Endpoints
 @app.get("/staff")
 def get_staff():
     return FirestoreDB.get_staff()
