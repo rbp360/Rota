@@ -8,3 +8,5 @@ recurring-ical-events
 firebase-admin
 google-cloud-firestore
 python-dateutil
+grpcio
+grpcio-status

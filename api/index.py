@@ -1,39 +1,65 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import sys
 import os
+import sys
 import traceback
 
-# Add the project root to the path so we can find the 'backend' folder
+# Fix paths immediately
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_dir not in sys.path:
     sys.path.append(root_dir)
 
+# Try to import FastAPI first (if this fails, the function won't work anyway)
 try:
-    from backend.main_firestore import app
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+except ImportError as e:
+    # This should never happen if requirements.txt is correct
+    raise e
+
+app = None
+init_error = None
+init_stack = None
+
+try:
+    # Attempt to import the actual backend
+    from backend.main_firestore import app as backend_app
+    app = backend_app
 except Exception as e:
-    # If the app fails to import, create a dummy app to report the error
+    init_error = str(e)
+    init_stack = traceback.format_exc()
+
+# If backend failed to load, create a fallback app to report the error
+if app is None:
     app = FastAPI()
-    error_msg = str(e)
-    stack_trace = traceback.format_exc()
     
+    @app.get("/api/health")
+    async def health():
+        return {
+            "status": "initialization_failed",
+            "error": init_error,
+            "trace": init_stack,
+            "path": sys.path
+        }
+
     @app.get("/api/{path:path}")
-    async def report_error(path: str):
+    async def catch_all(path: str):
         return JSONResponse(
             status_code=500,
             content={
-                "error": "Backend Initialization Failed",
-                "detail": error_msg,
-                "trace": stack_trace,
-                "current_dir": os.getcwd(),
-                "sys_path": sys.path
+                "error": "Backend Loading Error",
+                "message": init_error,
+                "trace": init_stack
             }
         )
+else:
+    # Backend loaded successfully!
+    # Ensure a health check exists
+    try:
+        @app.get("/api/health")
+        async def health():
+            return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
+    except:
+        # Route might already exist
+        pass
 
-# Add a health check at the very top level
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
-
-# Vercel needs the 'app' object
+# Ensure 'app' is available for Vercel
 app = app
