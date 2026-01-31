@@ -1,8 +1,4 @@
-# Exclude frontend from backend bundle
-frontend/
-node_modules/
-.git/
-.firebase/
+# Exclude large data files from the deployment
 *.xlsx
 *.db
 *.ics
@@ -11,3 +7,10 @@ node_modules/
 Dockerfile
 vercel_import.env
 rotaai-49847-firebase-adminsdk-*.json
+
+# Ignore node_modules, they are managed by Vercel
+node_modules/
+frontend/node_modules/
+
+# We NEED the frontend folder during build, so don't ignore the whole folder!
+# Vercel's build handles the separation of "static files" vs "serverless functions"
