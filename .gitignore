@@ -1,8 +1,20 @@
 .env
 *.env
-# Ignore the specific Firebase key but keep other json files
+# Secret files MUST NOT be pushed
 rotaai-49847-firebase-adminsdk-*.json
 
+# Ignore LARGE binary data files that bloat the Vercel function size
+GV cover and staff absence.xlsx
+temp_rota.xlsx
+rota.db
+reachcalendar.ics
+Cover.txt
+staff_audit.txt
+*.xlsx
+*.db
+*.ics
+
+# Dependencies and Builds
 node_modules/
 frontend/node_modules/
 dist/
@@ -13,4 +25,3 @@ __pycache__/
 *.pyc
 .vercel
 .firebase
-rota.db

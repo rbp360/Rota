@@ -1,0 +1,13 @@
+# Exclude frontend from backend bundle
+frontend/
+node_modules/
+.git/
+.firebase/
+*.xlsx
+*.db
+*.ics
+*.txt
+*.md
+Dockerfile
+vercel_import.env
+rotaai-49847-firebase-adminsdk-*.json
