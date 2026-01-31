@@ -11,6 +11,7 @@
 *.db
 *.ics
 *.txt
+!requirements.txt
 *.md
 rota.db
 reachcalendar.ics
