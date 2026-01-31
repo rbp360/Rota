@@ -22,11 +22,11 @@ ai_assistant = RotaAI()
 
 
 # API Endpoints
-@app.get("/staff")
+@app.get("/api/staff")
 def get_staff():
     return FirestoreDB.get_staff()
 
-@app.post("/absences")
+@app.post("/api/absences")
 def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
     staff = FirestoreDB.get_staff_member(name=staff_name)
     if not staff:
@@ -37,7 +37,7 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
     absence_id = FirestoreDB.add_absence(staff["id"], staff["name"], target_date, start_period, end_period)
     return {"id": absence_id, "status": "created"}
 
-@app.get("/suggest-cover/{absence_id}")
+@app.get("/api/suggest-cover/{absence_id}")
 def suggest_cover(absence_id: int, day: str = "Monday"):
     # Note: Firestore IDs are strings, but the API might still receive ints from legacy frontend
     # We should handle both or transition frontend to string IDs
@@ -107,7 +107,7 @@ def suggest_cover(absence_id: int, day: str = "Monday"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/availability")
+@app.get("/api/availability")
 def check_availability(periods: str, day: str = "Monday", date: str = None):
     try:
         period_list = [int(p) for p in periods.split(',') if p]
@@ -200,7 +200,7 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/assign-cover")
+@app.post("/api/assign-cover")
 def assign_cover(absence_id: str, staff_name: str, periods: str):
     staff = FirestoreDB.get_staff_member(name=staff_name)
     if not staff:
@@ -212,7 +212,7 @@ def assign_cover(absence_id: str, staff_name: str, periods: str):
     
     return {"message": f"Assigned {staff_name} to periods {periods}"}
 
-@app.get("/daily-rota")
+@app.get("/api/daily-rota")
 def get_daily_rota(date: str):
     try:
         target_date = parser.parse(date).strftime('%Y-%m-%d')
@@ -238,7 +238,7 @@ def get_daily_rota(date: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/unassign-cover")
+@app.delete("/api/unassign-cover")
 def unassign_cover(absence_id: str, period: int):
     FirestoreDB.unassign_cover(str(absence_id), period)
     return {"message": f"Unassigned period {period}"}

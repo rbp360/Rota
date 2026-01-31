@@ -1,8 +1,35 @@
-from backend.main_firestore import app
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import sys
+import os
+import traceback
 
-# This allows Vercel to serve the FastAPI app
-app = app
+# Add the project root to the path so we can find the 'backend' folder
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+try:
+    from backend.main_firestore import app
+except Exception as e:
+    # If the app fails to import, create a dummy app to report the error
+    app = FastAPI()
+    error_msg = str(e)
+    stack_trace = traceback.format_exc()
+    
+    @app.get("/api/{path:path}")
+    async def report_error(path: str):
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Backend Initialization Failed",
+                "detail": error_msg,
+                "trace": stack_trace if os.getenv("VERCEL") else "Check logs"
+            }
+        )
+
+# Add a health check at the very top level
 @app.get("/api/health")
-def health_check():
-    return {"status": "ok", "message": "Backend is reachable"}
+async def health():
+    return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
+
+# Vercel needs the 'app' object
+app = app
