@@ -1,7 +1,6 @@
 fastapi
 uvicorn
 sqlalchemy
-pandas
 openpyxl
 python-dotenv
 google-generativeai
@@ -10,3 +9,4 @@ icalendar
 recurring-ical-events
 firebase-admin
 google-cloud-firestore
+python-dateutil

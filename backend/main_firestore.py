@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from .database_firestore import FirestoreDB
 from .calendar_service import CalendarService
-import pandas as pd
+from datetime import datetime, date
+from dateutil import parser
 from fastapi.middleware.cors import CORSMiddleware
 from .ai_agent import RotaAI
 import os
@@ -34,7 +35,7 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
         raise HTTPException(status_code=404, detail=f"Staff '{staff_name}' not found")
     
     # In Firestore, we use string dates "YYYY-MM-DD"
-    target_date = pd.to_datetime(date).strftime('%Y-%m-%d')
+    target_date = parser.parse(date).strftime('%Y-%m-%d')
     absence_id = FirestoreDB.add_absence(staff["id"], staff["name"], target_date, start_period, end_period)
     return {"id": absence_id, "status": "created"}
 
@@ -73,7 +74,7 @@ def suggest_cover(absence_id: int, day: str = "Monday"):
             calendar_events = {}
             if s.get("calendar_url"):
                 try:
-                    target_dt = pd.to_datetime(absence["date"]).date()
+                    target_dt = parser.parse(absence["date"]).date()
                     calendar_events = CalendarService.get_busy_periods(s["calendar_url"], target_dt)
                     free_periods = [p for p in free_periods if p not in calendar_events]
                 except Exception:
@@ -121,9 +122,9 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
             staff = [s for s in all_staff if s.get("is_active", True)]
             
         if date:
-            target_dt = pd.to_datetime(date).strftime('%Y-%m-%d')
+            target_dt = parser.parse(date).strftime('%Y-%m-%d')
         else:
-            target_dt = pd.Timestamp.now().strftime('%Y-%m-%d')
+            target_dt = datetime.now().strftime('%Y-%m-%d')
             
         active_absences = FirestoreDB.get_absences(date=target_dt)
         cover_map = {} # covering_staff_id -> {period: absent_staff_name}
@@ -143,7 +144,7 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
             calendar_busy = []
             if s.get("calendar_url"):
                 try:
-                    dt_obj = pd.to_datetime(target_dt).date()
+                    dt_obj = parser.parse(target_dt).date()
                     calendar_busy = CalendarService.get_busy_periods(s["calendar_url"], dt_obj)
                 except:
                     pass
@@ -216,7 +217,7 @@ def assign_cover(absence_id: str, staff_name: str, periods: str):
 @app.get("/daily-rota")
 def get_daily_rota(date: str):
     try:
-        target_date = pd.to_datetime(date).strftime('%Y-%m-%d')
+        target_date = parser.parse(date).strftime('%Y-%m-%d')
         absences = FirestoreDB.get_absences(date=target_date)
         
         results = []
