@@ -3,6 +3,10 @@
     "version": "1.0.0",
     "private": true,
     "scripts": {
-        "build": "cd frontend && npm install && npx vite build --outDir ../dist"
+        "build": "cd frontend && npm install && npx vite build --config vite.config.js --outDir ../frontend/dist"
+    },
+    "devDependencies": {
+        "vite": "^7.3.1",
+        "@vitejs/plugin-react": "^4.2.0"
     }
 }
