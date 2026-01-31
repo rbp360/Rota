@@ -8,3 +8,5 @@ google-generativeai
 requests
 icalendar
 recurring-ical-events
+firebase-admin
+google-cloud-firestore
