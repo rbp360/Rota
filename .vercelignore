@@ -3,6 +3,8 @@
 *.db
 *.ics
 *.txt
+!requirements.txt
+!runtime.txt
 *.md
 Dockerfile
 vercel_import.env
