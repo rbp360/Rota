@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-# sqlalchemy is not needed for Firestore
-# openpyxl is not needed for the deployed app (only for local migration)
 python-dotenv
 google-generativeai
 requests
@@ -10,3 +8,5 @@ recurring-ical-events
 firebase-admin
 google-cloud-firestore
 python-dateutil
+grpcio
+grpcio-status
