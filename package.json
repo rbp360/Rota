@@ -3,6 +3,6 @@
     "version": "1.0.0",
     "private": true,
     "scripts": {
-        "build": "cd frontend && npm install && node ./node_modules/vite/bin/vite.js build --emptyOutDir"
+        "build": "cd frontend && npm install && npx vite build --outDir ../dist"
     }
 }
