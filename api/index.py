@@ -4,52 +4,50 @@ import sys
 import os
 import traceback
 
-# 1. Ensure the 'backend' folder is findable
-root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if root not in sys.path:
-    sys.path.insert(0, root)
+# 1. FORCE THE PATH
+# This ensures that even in 'Serverless' mode, the backend folder is found.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 app = FastAPI()
 
-# 2. Try to import the real app logic
-try:
-    from backend.main_firestore import app as backend_app
-    # Use the real backend app
-    app = backend_app
-except Exception as e:
-    # If it fails, we keep our dummy app to report the error visually
-    error_detail = str(e)
-    error_trace = traceback.format_exc()
-    
-    @app.get("/api/health")
-    async def health_failure():
-        return {
-            "status": "backend_load_failed",
-            "error": error_detail,
-            "trace": error_trace
-        }
-
-# 3. Add a top-level health check (Vercel heart-beat)
+# 2. STANDALONE HEALTH CHECK (No imports required)
+# If this works, the plumbing is correct.
 @app.get("/api/health")
 async def health_check():
-    db_status = "unknown"
+    db_status = "not_checked"
     staff_count = 0
+    
+    # Try to get the real data, but don't crash if it fails
     try:
         from backend.database_firestore import get_db, FirestoreDB
         db = get_db()
-        db_status = "connected" if db else "failed"
         if db:
+            db_status = "connected"
             staff_count = len(FirestoreDB.get_staff())
-    except:
-        pass
+        else:
+            db_status = "db_init_failed"
+    except Exception as e:
+        db_status = f"import_error: {str(e)}"
         
     return {
-        "status": "ok",
-        "version": "1.5.0",
+        "status": "online",
+        "version": "1.5.2",
         "db": db_status,
         "staff_count": staff_count,
-        "environment": "vercel"
+        "note": "If you see this, the API is ALIVE."
     }
 
-# Vercel looks for 'app'
-app = app
+# 3. BRIDGE TO REAL BACKEND
+@app.post("/api/import-staff")
+async def bridge_import(request: Request):
+    try:
+        from backend.main_firestore import import_staff_bridge
+        return await import_staff_bridge(request)
+    except Exception as e:
+        return {"error": f"Bridge failed: {str(e)}"}
+
+# Mandatory for Vercel
+handler = app
