@@ -22,6 +22,32 @@ ai_assistant = RotaAI()
 
 
 # API Endpoints
+@app.post("/api/import-staff")
+def import_staff(data: list):
+    count = 0
+    for s in data:
+        try:
+            FirestoreDB.assign_cover # Just a dummy to ensure FirestoreDB is working
+            from .database_firestore import get_db
+            db = get_db()
+            staff_ref = db.collection("staff").document(str(s["id"]))
+            staff_ref.set({
+                "name": s["name"],
+                "role": s.get("role", "Teacher"),
+                "profile": s.get("profile"),
+                "is_priority": s.get("is_priority", False),
+                "is_specialist": s.get("is_specialist", False),
+                "is_active": s.get("is_active", True),
+                "can_cover_periods": s.get("can_cover_periods", True),
+                "calendar_url": s.get("calendar_url")
+            })
+            if "schedules" in s:
+                for sch in s["schedules"]:
+                    staff_ref.collection("schedules").document(f"{sch['day_of_week']}_{sch['period']}").set(sch)
+            count += 1
+        except: pass
+    return {"imported": count}
+
 @app.get("/api/staff")
 def get_staff():
     return FirestoreDB.get_staff()
