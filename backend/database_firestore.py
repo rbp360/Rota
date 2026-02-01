@@ -26,11 +26,18 @@ def get_db():
                 try:
                     # Attempt to decode base64
                     decoded = base64.b64decode(raw_info).decode('utf-8')
-                    info = json.loads(decoded)
+                    try:
+                        info = json.loads(decoded)
+                    except Exception as json_err:
+                        # Vercel sometimes mangles escapes. Try a manual fix.
+                        # Replace literal \n sequences if they aren't working
+                        fixed = decoded.replace('\\n', '\n')
+                        info = json.loads(fixed)
+                    
                     cred = credentials.Certificate(info)
                     firebase_admin.initialize_app(cred)
                 except Exception as e:
-                    os.environ["FIREBASE_INIT_ERROR"] = f"Base64 Decode Failed: {str(e)}"
+                    os.environ["FIREBASE_INIT_ERROR"] = f"Base64 Fix Failed: {str(e)}"
             else:
                 # Fallback to the previous robust JSON cleaner
                 if raw_info.startswith('"') and raw_info.endswith('"'):
