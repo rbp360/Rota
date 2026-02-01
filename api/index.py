@@ -1,20 +1,20 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import os
+from http.server import BaseHTTPRequestHandler
+import json
 
-app = FastAPI()
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "pure_python_v160",
+            "msg": "If you see this, FastAPI was the problem."
+        }).encode())
+        return
 
-@app.get("/api/health")
-async def health():
-    return {
-        "status": "baseline_v2",
-        "version": "1.5.4",
-        "env": os.environ.get("VERCEL_ENV", "unknown")
-    }
-
-@app.all("/api/import-staff")
-async def import_staff(request: Request):
-    return {"message": "Endpoint reached. Ready for data push."}
-
-# The variable name MUST be 'app' for Vercel's auto-detection of FastAPI
-app = app
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "received"}).encode())
+        return
