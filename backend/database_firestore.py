@@ -1,7 +1,6 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
-from datetime import datetime
 import json
 import base64
 import re
@@ -18,39 +17,62 @@ def get_db():
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
-            raw_info = service_account_info.strip()
-            # Remove wrapping quotes
-            if raw_info.startswith('"') and raw_info.endswith('"'):
-                raw_info = raw_info[1:-1]
-            if raw_info.startswith("'") and raw_info.endswith("'"):
-                raw_info = raw_info[1:-1]
-                
-            detected_type = "json" if raw_info.startswith('{') else "b64"
+            # 1. CLEANING: Remove ALL whitespace/newlines from the raw input
+            # Vercel often adds spaces or line breaks when importing .env files
+            raw_input = "".join(service_account_info.split())
+            
+            # Remove any wrapping quotes
+            if raw_input.startswith('"') and raw_input.endswith('"'):
+                raw_input = raw_input[1:-1]
+            if raw_input.startswith("'") and raw_input.endswith("'"):
+                raw_input = raw_input[1:-1]
+
+            detected_type = "json" if raw_input.startswith('{') else "b64"
             
             try:
                 if detected_type == "b64":
-                    decoded_bytes = base64.b64decode(raw_info)
-                    info = json.loads(decoded_bytes.decode('utf-8'))
+                    # Step 1: Decode Base64 (ignoring any remaining whitespace)
+                    decoded_bytes = base64.b64decode(raw_input)
+                    info_str = decoded_bytes.decode('utf-8')
                 else:
-                    # Clean up literal newlines in raw json
-                    cleaned = raw_info.replace('\n', '\\n').replace('\r', '')
-                    info = json.loads(cleaned)
-                
-                # DIAGNOSTICS
-                if isinstance(info, dict):
-                    keys = list(info.keys())
-                    found_type = str(info.get("type", "MISSING"))
-                    if found_type != "service_account":
-                        os.environ["FIREBASE_INIT_ERROR"] = f"WrongType:[{found_type}] | Keys:{keys}"
-                        return None
-                else:
-                    os.environ["FIREBASE_INIT_ERROR"] = f"NotADict: {type(info)}"
-                    return None
+                    info_str = raw_input
 
+                # Step 2: REPAIR THE JSON STRING
+                # This fixes the "Invalid \escape" error specifically.
+                # It replaces literal backslashes with doubled backslashes, 
+                # but only where they aren't part of a valid escape sequence.
+                def clean_json_string(s):
+                    # Step A: Handle literal newlines that should be \n
+                    s = s.replace('\n', '\\n').replace('\r', '')
+                    # Step B: Fix double escaped backslashes common in Vercel
+                    s = s.replace('\\\\', '\\')
+                    # Step C: Re-escape the private key specifically (the most fragile part)
+                    # We look for the private_key start and ensure newlines are \n
+                    if '"private_key":' in s:
+                        parts = s.split('"private_key":')
+                        # The start of the key string
+                        key_part = parts[1].split('"', 2)
+                        if len(key_part) >= 3:
+                            # Clean the inner key content
+                            cleaned_key = key_part[1].replace('\\n', '\n').replace('\n', '\\n')
+                            parts[1] = '"' + cleaned_key + '"' + key_part[2]
+                            s = '"private_key":'.join(parts)
+                    return s
+
+                try:
+                    info = json.loads(info_str)
+                except:
+                    # If raw fail, try cleaning
+                    repaired = clean_json_string(info_str)
+                    info = json.loads(repaired)
+                
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                os.environ["FIREBASE_INIT_ERROR"] = f"Err:{str(e)} | Type:{detected_type} | Len:{len(raw_info)}"
+                # FINAL DIAGNOSTIC: Pinpoint the exact character if it still fails
+                err_msg = str(e)
+                snippet = f"{raw_input[:20]}...{raw_input[-20:]}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"{err_msg} | Type:{detected_type} | Snippet:{snippet}"
         
         if not firebase_admin._apps:
             try:

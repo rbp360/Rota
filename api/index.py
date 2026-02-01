@@ -52,7 +52,7 @@ try:
 
         return {
             "status": "ok",
-            "version": "1.0.9",
+            "version": "1.1.0",
             "db": db_status,
             "db_error": os.getenv("FIREBASE_INIT_ERROR", "none"),
             "environment": "vercel" if os.getenv("VERCEL") else "local"
