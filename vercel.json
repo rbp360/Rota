@@ -1,6 +1,4 @@
 {
-    "version": 2,
-    "outputDirectory": "dist",
     "rewrites": [
         {
             "source": "/api/(.*)",
@@ -8,7 +6,7 @@
         },
         {
             "source": "/(.*)",
-            "destination": "/index.html"
+            "destination": "https://rotaai-smoky.vercel.app/index.html"
         }
     ]
 }
