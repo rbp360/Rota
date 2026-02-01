@@ -17,39 +17,30 @@ def get_db():
         # 1. Try to load from "FIREBASE_SERVICE_ACCOUNT" environment variable
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
-        if service_account_info:
+            # Detect if it's Base64 or Raw JSON
             import base64
             raw_info = service_account_info.strip()
+            detected_type = "b64" if not raw_info.startswith('{') else "json"
             
-            # Detect if it's Base64 or Raw JSON
-            if not raw_info.startswith('{'):
-                try:
-                    # Attempt to decode base64
+            try:
+                if detected_type == "b64":
                     decoded = base64.b64decode(raw_info).decode('utf-8')
-                    try:
-                        info = json.loads(decoded)
-                    except Exception as json_err:
-                        # Vercel sometimes mangles escapes. Try a manual fix.
-                        # Replace literal \n sequences if they aren't working
-                        fixed = decoded.replace('\\n', '\n')
-                        info = json.loads(fixed)
-                    
-                    cred = credentials.Certificate(info)
-                    firebase_admin.initialize_app(cred)
-                except Exception as e:
-                    os.environ["FIREBASE_INIT_ERROR"] = f"Base64 Fix Failed: {str(e)}"
-            else:
-                # Fallback to the previous robust JSON cleaner
-                if raw_info.startswith('"') and raw_info.endswith('"'):
-                    raw_info = raw_info[1:-1]
-                raw_info = raw_info.replace('\\n', '\n').replace('\n', '\\n')
-                try:
-                    info = json.loads(raw_info)
-                    cred = credentials.Certificate(info)
-                    firebase_admin.initialize_app(cred)
-                except Exception as e:
-                    snippet = f"{raw_info[:30]}...{raw_info[-10:]}"
-                    os.environ["FIREBASE_INIT_ERROR"] = f"JSON Failed: {str(e)} | Snippet: {snippet}"
+                    info = json.loads(decoded)
+                else:
+                    # Clean up mangled JSON
+                    cleaned = raw_info
+                    if cleaned.startswith("'") or cleaned.startswith('"'):
+                        cleaned = cleaned[1:-1]
+                    # Fix escapes: Vercel sometimes double-escapes \n or \/
+                    cleaned = cleaned.replace('\\\\', '\\')
+                    cleaned = cleaned.replace('\\n', '\n').replace('\n', '\\n')
+                    info = json.loads(cleaned)
+                
+                cred = credentials.Certificate(info)
+                firebase_admin.initialize_app(cred)
+            except Exception as e:
+                snippet = f"{raw_info[:20]}...{raw_info[-20:]}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"Type:{detected_type} | Err:{str(e)} | Len:{len(raw_info)} | Snippet:{snippet}"
         
         # 2. Try Default Application Credentials (useful if running in Google Cloud environment)
         if not firebase_admin._apps:
