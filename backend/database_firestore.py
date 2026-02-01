@@ -23,6 +23,8 @@ def get_db():
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
+                # Store error for diagnostics
+                os.environ["FIREBASE_INIT_ERROR"] = str(e)
                 print(f"Error loading FIREBASE_SERVICE_ACCOUNT env: {e}")
         
         # 2. Try Default Application Credentials (useful if running in Google Cloud environment)
