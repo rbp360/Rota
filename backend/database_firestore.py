@@ -10,18 +10,17 @@ import re
 _db = None
 
 def heal_json(s):
-    """
+    r"""
     Scans for illegal backslashes in JSON and fixes them.
-    Only \", \\, \/, \b, \f, \n, \r, \t, \u are allowed.
     """
     def replacer(match):
         esc = match.group(0)
         if len(esc) < 2: return esc
-        if esc[1] in 'bfnrtu"\\\\/':
+        if esc[1] in 'bfnrtu"\\/':
             return esc
         # If it's invalid (like \m or \ ), double the backslash to make it a literal backslash
         return '\\\\' + esc[1]
-    return re.sub(r'\\\\.', replacer, s)
+    return re.sub(r'\\.', replacer, s)
 
 def get_db():
     global _db
@@ -39,14 +38,12 @@ def get_db():
             if raw_info.startswith("'") and raw_info.endswith("'"):
                 raw_info = raw_info[1:-1]
                 
-            detected_type = "b64" if not raw_info.startswith('{') else "json"
+            detected_type = "json" if raw_info.startswith('{') else "b64"
             
             try:
                 if detected_type == "b64":
-                    # Step 1: Decode
                     decoded_bytes = base64.b64decode(raw_info)
                     decoded_str = decoded_bytes.decode('utf-8')
-                    # Step 2: Heal logic
                     # First, turn literal newlines into \n symbols
                     cleaned = decoded_str.replace('\n', '\\n').replace('\r', '')
                     # Then fix double escaping
@@ -54,29 +51,30 @@ def get_db():
                     try:
                         info = json.loads(cleaned)
                     except:
-                        # Fallback: Heal illegal escapes
                         info = json.loads(heal_json(cleaned))
                 else:
-                    cleaned = heal_json(raw_info.replace('\n', '\\n'))
-                    info = json.loads(cleaned)
+                    # Fix literal newlines in raw json
+                    cleaned = raw_info.replace('\n', '\\n').replace('\r', '')
+                    try:
+                        info = json.loads(cleaned)
+                    except:
+                        info = json.loads(heal_json(cleaned))
                 
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
                 err_msg = str(e)
                 char_info = ""
-                # X-RAY: Find the exact character that failed
+                # Use the last attempted string
+                target = cleaned if 'cleaned' in locals() else raw_info
                 match = re.search(r'\(char (\d+)\)', err_msg)
                 if match:
                     idx = int(match.group(1))
-                    # Use the raw string we tried to parse
-                    target = cleaned if 'cleaned' in locals() else raw_info
-                    snippet = target[max(0, idx-10):min(len(target), idx+10)]
+                    snippet = target[max(0, idx-15):min(len(target), idx+15)]
                     char_info = f" | At{idx}:[{snippet}]"
                 
                 os.environ["FIREBASE_INIT_ERROR"] = f"{err_msg}{char_info}"
         
-        # 2. Try Default Application Credentials
         if not firebase_admin._apps:
             try:
                 firebase_admin.initialize_app()
