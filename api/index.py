@@ -1,22 +1,26 @@
 from fastapi import FastAPI, Request
-import os
+from fastapi.responses import JSONResponse
 import sys
+import os
 
-# Ensure backend can be found
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root not in sys.path:
     sys.path.insert(0, root)
+
+app = FastAPI()
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"DEBUG: Path: {request.url.path}")
+    return await call_next(request)
 
 try:
     from backend.main_firestore import app as backend_app
     app = backend_app
 except Exception as e:
-    # Diagnostic fallback
-    app = FastAPI()
     @app.get("/api/health")
-    def health_diag():
-        import traceback
-        return {"status": "crash", "error": str(e), "trace": traceback.format_exc()}
+    def fail(request: Request):
+        return {"status": "crash", "error": str(e), "path": request.url.path}
 
-# Vercel's Python runtime auto-detects 'app' for FastAPI
+# Mandatory
 app = app
