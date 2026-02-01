@@ -42,7 +42,19 @@ except Exception as e:
 try:
     @app.get("/api/health")
     async def health():
-        return {"status": "ok", "environment": "vercel" if os.getenv("VERCEL") else "local"}
+        db_status = "unknown"
+        try:
+            from backend.database_firestore import get_db
+            db = get_db()
+            db_status = "connected" if db else "failed"
+        except Exception as db_err:
+            db_status = f"error: {str(db_err)}"
+
+        return {
+            "status": "ok",
+            "db": db_status,
+            "environment": "vercel" if os.getenv("VERCEL") else "local"
+        }
 except:
     pass
 
