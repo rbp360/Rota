@@ -2,27 +2,9 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import json
-import binascii
-import re
 
 # Global variable for the firestore client
 _db = None
-
-def normalize_pem(pk_str):
-    """
-    Surgically repairs a PEM private key by stripping all whitespace/escapes
-    and re-wrapping it to the strict 64-character standard.
-    """
-    # 1. Remove markers and all whitespace/newlines/escapes
-    pk_clean = pk_str.replace("-----BEGIN PRIVATE KEY-----", "")
-    pk_clean = pk_clean.replace("-----END PRIVATE KEY-----", "")
-    pk_clean = pk_clean.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "")
-    
-    # 2. Rebuild the body with strict 64-character lines
-    lines = [pk_clean[i:i+64] for i in range(0, len(pk_clean), 64)]
-    
-    # 3. Assemble the final PEM
-    return "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
 def get_db():
     global _db
@@ -30,36 +12,48 @@ def get_db():
         return _db
         
     if not firebase_admin._apps:
-        service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+        # 1. Try Individual Variables (The most stable method for Vercel)
+        pk = os.getenv("FIREBASE_PRIVATE_KEY")
+        email = os.getenv("FIREBASE_CLIENT_EMAIL")
+        project_id = os.getenv("FIREBASE_PROJECT_ID")
         
-        if service_account_info:
-            raw_input = "".join(service_account_info.split()).strip()
-            if raw_input.startswith(('"', "'")) and raw_input.endswith(('"', "'")):
-                raw_input = raw_input[1:-1]
-
+        if pk and email and project_id:
             try:
-                # 1. Decode the Hex/JSON/B64
-                if all(c in '0123456789abcdefABCDEF' for c in raw_input) and len(raw_input) > 500:
-                    decoded = binascii.unhexlify(raw_input).decode('utf-8')
-                    info = json.loads(decoded)
-                elif raw_input.startswith('{'):
-                    info = json.loads(raw_input)
-                else:
-                    import base64
-                    info = json.loads(base64.b64decode(raw_input).decode('utf-8'))
+                # Clean the private key: replace literal \n with real newlines
+                clean_pk = pk.replace("\\n", "\n").strip()
+                # If it's wrapped in quotes, strip them
+                if clean_pk.startswith('"') and clean_pk.endswith('"'):
+                    clean_pk = clean_pk[1:-1]
                 
-                # 2. SURGICAL REPAIR
-                if "private_key" in info:
-                    info["private_key"] = normalize_pem(info["private_key"])
-
+                info = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key": clean_pk,
+                    "client_email": email,
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                err_msg = str(e)
-                # Diagnostic snapshot
-                pk_len = len(info.get("private_key", "")) if 'info' in locals() else 0
-                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.2 | {err_msg} | PK_Len:{pk_len}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.3.0 | Individual Vars Failed: {str(e)}"
+
+        # 2. Fallback to the old JSON blob (if still set)
+        if not firebase_admin._apps:
+            service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+            if service_account_info:
+                try:
+                    # Very basic JSON load
+                    raw = service_account_info.strip()
+                    if raw.startswith('"') and raw.endswith('"'): raw = raw[1:-1]
+                    info = json.loads(raw)
+                    if "private_key" in info:
+                        info["private_key"] = info["private_key"].replace("\\n", "\n")
+                    cred = credentials.Certificate(info)
+                    firebase_admin.initialize_app(cred)
+                except Exception as e:
+                    os.environ["FIREBASE_INIT_ERROR"] = f"v1.3.0 | JSON Fallback Failed: {str(e)}"
         
+        # 3. Last resort: Default credentials
         if not firebase_admin._apps:
             try:
                 firebase_admin.initialize_app()
