@@ -60,7 +60,7 @@ try:
 
         return {
             "status": "ok",
-            "version": "1.3.3",
+            "version": "1.3.4",
             "db": db_status,
             "staff_count": staff_count,
             "db_error": os.getenv("FIREBASE_INIT_ERROR", "none"),

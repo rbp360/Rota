@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Body
 from .database_firestore import FirestoreDB
 from .calendar_service import CalendarService
 from datetime import datetime, date
@@ -23,7 +23,7 @@ ai_assistant = RotaAI()
 
 # API Endpoints
 @app.post("/api/import-staff")
-def import_staff(data: list):
+def import_staff(data: list = Body(...)):
     count = 0
     for s in data:
         try:
