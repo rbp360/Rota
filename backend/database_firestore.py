@@ -19,27 +19,34 @@ def get_db():
         
         if service_account_info:
             raw_info = service_account_info.strip()
+            # Remove any wrapping quotes that Vercel might have added
+            if raw_info.startswith('"') and raw_info.endswith('"'):
+                raw_info = raw_info[1:-1]
+            if raw_info.startswith("'") and raw_info.endswith("'"):
+                raw_info = raw_info[1:-1]
+                
             detected_type = "b64" if not raw_info.startswith('{') else "json"
             
             try:
                 if detected_type == "b64":
                     decoded = base64.b64decode(raw_info).decode('utf-8')
-                    info = json.loads(decoded)
+                    # Apply cleaning to the decoded string too!
+                    cleaned = decoded.replace('\\\\', '\\').replace('\\n', '\n').replace('\n', '\\n')
+                    try:
+                        info = json.loads(cleaned)
+                    except:
+                        # If cleaning made it worse, try the raw decoded string
+                        info = json.loads(decoded)
                 else:
                     # Clean up mangled JSON
-                    cleaned = raw_info
-                    if cleaned.startswith("'") or cleaned.startswith('"'):
-                        cleaned = cleaned[1:-1]
-                    # Fix escapes: Vercel sometimes double-escapes \n or \/
-                    cleaned = cleaned.replace('\\\\', '\\')
-                    cleaned = cleaned.replace('\\n', '\n').replace('\n', '\\n')
+                    cleaned = raw_info.replace('\\\\', '\\').replace('\\n', '\n').replace('\n', '\\n')
                     info = json.loads(cleaned)
                 
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
                 snippet = f"{raw_info[:20]}...{raw_info[-20:]}"
-                os.environ["FIREBASE_INIT_ERROR"] = f"Type:{detected_type} | Err:{str(e)} | Len:{len(raw_info)} | Snippet:{snippet}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"Type:{detected_type} | Err:{str(e)} | Snippet:{snippet}"
         
         # 2. Try Default Application Credentials
         if not firebase_admin._apps:
@@ -49,11 +56,13 @@ def get_db():
                 pass
     
     try:
-        _db = firestore.client()
-        return _db
+        if firebase_admin._apps:
+            _db = firestore.client()
+            return _db
     except Exception as e:
         print(f"CRITICAL: Could not initialize Firestore client: {e}")
         return None
+    return None
 
 class FirestoreDB:
     @staticmethod
