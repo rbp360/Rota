@@ -1,4 +1,4 @@
-# Large data and tool files
+# Exclude large data and tool files
 *.xlsx
 *.db
 *.ics
@@ -12,18 +12,19 @@ __pycache__/
 # Archive
 data_archive/
 
-# Exclude root-level Python tools from the function
+# Exclude root-level Python tools NOT needed for production
+# But we must NOT ignore the folders Vite needs for building
 /*.py
 !/api/
 !/backend/
 
-# Folders not needed for the serverless function bundle
-# (But Vite will still have access to them during the build step)
-node_modules/
+# Folders to IGNORE in the final bundle
 .git/
 .vercel/
 .firebase/
+node_modules/
 frontend/node_modules/
-frontend/src/
-frontend/public/
-frontend/dist/
+
+# We must NOT ignore frontend/src/ or frontend/public/ in .vercelignore
+# because Vite needs them to build the static site!
+# We will use vercel.json to exclude them from the API function instead.
