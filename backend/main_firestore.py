@@ -4,7 +4,6 @@ from .calendar_service import CalendarService
 from datetime import datetime, date
 from dateutil import parser
 from fastapi.middleware.cors import CORSMiddleware
-from .ai_agent import RotaAI
 import os
 
 app = FastAPI(title="Teacher Cover Rota API (Firestore)")
@@ -18,15 +17,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ai_assistant = RotaAI()
+# Lazy AI Helper
+_ai = None
+def get_ai():
+    global _ai
+    if _ai is None:
+        try:
+            from .ai_agent import RotaAI
+            _ai = RotaAI()
+        except Exception as e:
+            print(f"AI initialization failed: {e}")
+            return None
+    return _ai
 
 # --- BULK IMPORT (The Bridge) ---
 @app.post("/api/import-staff")
 async def import_staff_bridge(request: Request):
-    """
-    Receives JSON list and saves to Firestore. 
-    Using Request object to bypass FastAPI's multipart check.
-    """
     try:
         data = await request.json()
     except:
@@ -58,7 +64,6 @@ async def import_staff_bridge(request: Request):
         except: pass
     return {"imported": count}
 
-# --- Standard Endpoints ---
 @app.get("/api/staff")
 def get_staff():
     return FirestoreDB.get_staff()
@@ -100,7 +105,11 @@ def suggest_cover(absence_id: int, day: str = "Monday"):
                 "free_periods": free_periods, "busy_periods": busy_periods
             })
 
-        ai_response = ai_assistant.suggest_cover(
+        ai = get_ai()
+        if not ai:
+            return {"suggestions": "AI features are currently unavailable on this deployment."}
+
+        ai_response = ai.suggest_cover(
             absent_staff=absence["staff_name"], day=day,
             periods=target_periods, available_staff_profiles=available_profiles
         )
@@ -114,27 +123,12 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
         period_list = [int(p) for p in periods.split(',') if p]
         all_staff = FirestoreDB.get_staff()
         staff = [s for s in all_staff if s.get("is_active", True) and s.get("can_cover_periods", True)]
-        # ... simplified logic to just return staff for now to verify connection
         return [{"name": s["name"], "is_free": True} for s in staff]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/assign-cover")
-def assign_cover_api(absence_id: str, staff_name: str, periods: str):
-    staff = FirestoreDB.get_staff_member(name=staff_name)
-    if not staff: raise HTTPException(status_code=404)
-    period_list = [int(p) for p in periods.split(',') if p]
-    for p in period_list:
-        FirestoreDB.assign_cover(str(absence_id), staff["id"], staff["name"], p)
-    return {"status": "ok"}
 
 @app.get("/api/daily-rota")
 def get_daily_rota(date: str):
     target_date = parser.parse(date).strftime('%Y-%m-%d')
     absences = FirestoreDB.get_absences(date=target_date)
     return absences
-
-@app.delete("/api/unassign-cover")
-def unassign_cover_api(absence_id: str, period: int):
-    FirestoreDB.unassign_cover(str(absence_id), period)
-    return {"status": "ok"}

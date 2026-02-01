@@ -61,16 +61,6 @@ def get_db():
         pass
     return None
 
-# For backward compatibility with migration scripts
-@property
-def db():
-    return get_db()
-
-# We need a real 'db' object at the top level for migration scripts that do 'from ... import db'
-# But since get_db might fail initially, we can't just set it once at import time.
-# However, many scripts expect it. Let's provide a proxy or just initialize it.
-db = get_db()
-
 class FirestoreDB:
     @staticmethod
     def get_staff():
