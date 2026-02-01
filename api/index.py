@@ -1,20 +1,22 @@
-from http.server import BaseHTTPRequestHandler
-import json
+from fastapi import FastAPI, Request
+import os
+import sys
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({
-            "status": "pure_python_v160",
-            "msg": "If you see this, FastAPI was the problem."
-        }).encode())
-        return
+# Ensure backend can be found
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root not in sys.path:
+    sys.path.insert(0, root)
 
-    def do_POST(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({"status": "received"}).encode())
-        return
+try:
+    from backend.main_firestore import app as backend_app
+    app = backend_app
+except Exception as e:
+    # Diagnostic fallback
+    app = FastAPI()
+    @app.get("/api/health")
+    def health_diag():
+        import traceback
+        return {"status": "crash", "error": str(e), "trace": traceback.format_exc()}
+
+# Vercel's Python runtime auto-detects 'app' for FastAPI
+app = app
