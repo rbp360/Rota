@@ -1,12 +1,8 @@
 {
-    "rewrites": [
+    "builds": [
         {
-            "source": "/api/(.*)",
-            "destination": "/api/index.py"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "https://rotaai-smoky.vercel.app/index.html"
+            "src": "api/index.py",
+            "use": "@vercel/python"
         }
     ]
 }
