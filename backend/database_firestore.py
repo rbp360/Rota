@@ -2,8 +2,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import json
-import base64
-import re
+import binascii
 
 # Global variable for the firestore client
 _db = None
@@ -17,62 +16,33 @@ def get_db():
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
-            # 1. CLEANING: Remove ALL whitespace/newlines from the raw input
-            # Vercel often adds spaces or line breaks when importing .env files
+            # CLEANING: Remove ALL whitespace/newlines from the raw input
             raw_input = "".join(service_account_info.split())
             
             # Remove any wrapping quotes
-            if raw_input.startswith('"') and raw_input.endswith('"'):
-                raw_input = raw_input[1:-1]
-            if raw_input.startswith("'") and raw_input.endswith("'"):
+            if raw_input.startswith(('"', "'")) and raw_input.endswith(('"', "'")):
                 raw_input = raw_input[1:-1]
 
-            detected_type = "json" if raw_input.startswith('{') else "b64"
-            
             try:
-                if detected_type == "b64":
-                    # Step 1: Decode Base64 (ignoring any remaining whitespace)
-                    decoded_bytes = base64.b64decode(raw_input)
-                    info_str = decoded_bytes.decode('utf-8')
+                # 1. Try to see if it's HEX (All 0-9, a-f)
+                if all(c in '0123456789abcdefABCDEF' for c in raw_input) and len(raw_input) > 500:
+                    decoded_str = binascii.unhexlify(raw_input).decode('utf-8')
+                    info = json.loads(decoded_str)
                 else:
-                    info_str = raw_input
-
-                # Step 2: REPAIR THE JSON STRING
-                # This fixes the "Invalid \escape" error specifically.
-                # It replaces literal backslashes with doubled backslashes, 
-                # but only where they aren't part of a valid escape sequence.
-                def clean_json_string(s):
-                    # Step A: Handle literal newlines that should be \n
-                    s = s.replace('\n', '\\n').replace('\r', '')
-                    # Step B: Fix double escaped backslashes common in Vercel
-                    s = s.replace('\\\\', '\\')
-                    # Step C: Re-escape the private key specifically (the most fragile part)
-                    # We look for the private_key start and ensure newlines are \n
-                    if '"private_key":' in s:
-                        parts = s.split('"private_key":')
-                        # The start of the key string
-                        key_part = parts[1].split('"', 2)
-                        if len(key_part) >= 3:
-                            # Clean the inner key content
-                            cleaned_key = key_part[1].replace('\\n', '\n').replace('\n', '\\n')
-                            parts[1] = '"' + cleaned_key + '"' + key_part[2]
-                            s = '"private_key":'.join(parts)
-                    return s
-
-                try:
-                    info = json.loads(info_str)
-                except:
-                    # If raw fail, try cleaning
-                    repaired = clean_json_string(info_str)
-                    info = json.loads(repaired)
+                    # 2. Try standard JSON/Base64 handling (Fallback)
+                    import base64
+                    if raw_input.startswith('{'):
+                        cleaned = raw_input.replace('\n', '\\n').replace('\r', '')
+                        info = json.loads(cleaned)
+                    else:
+                        decoded_bytes = base64.b64decode(raw_input)
+                        info = json.loads(decoded_bytes.decode('utf-8'))
                 
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                # FINAL DIAGNOSTIC: Pinpoint the exact character if it still fails
-                err_msg = str(e)
                 snippet = f"{raw_input[:20]}...{raw_input[-20:]}"
-                os.environ["FIREBASE_INIT_ERROR"] = f"{err_msg} | Type:{detected_type} | Snippet:{snippet}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.0 | {str(e)} | Len:{len(raw_input)} | Snippet:{snippet}"
         
         if not firebase_admin._apps:
             try:
