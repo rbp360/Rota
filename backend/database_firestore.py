@@ -3,9 +3,26 @@ from firebase_admin import credentials, firestore
 import os
 import json
 import binascii
+import re
 
 # Global variable for the firestore client
 _db = None
+
+def normalize_pem(pk_str):
+    """
+    Surgically repairs a PEM private key by stripping all whitespace/escapes
+    and re-wrapping it to the strict 64-character standard.
+    """
+    # 1. Remove markers and all whitespace/newlines/escapes
+    pk_clean = pk_str.replace("-----BEGIN PRIVATE KEY-----", "")
+    pk_clean = pk_clean.replace("-----END PRIVATE KEY-----", "")
+    pk_clean = pk_clean.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "")
+    
+    # 2. Rebuild the body with strict 64-character lines
+    lines = [pk_clean[i:i+64] for i in range(0, len(pk_clean), 64)]
+    
+    # 3. Assemble the final PEM
+    return "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
 def get_db():
     global _db
@@ -16,39 +33,32 @@ def get_db():
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
-            # Clean input
             raw_input = "".join(service_account_info.split()).strip()
             if raw_input.startswith(('"', "'")) and raw_input.endswith(('"', "'")):
                 raw_input = raw_input[1:-1]
 
             try:
-                # 1. Decode the Hex
+                # 1. Decode the Hex/JSON/B64
                 if all(c in '0123456789abcdefABCDEF' for c in raw_input) and len(raw_input) > 500:
-                    decoded_str = binascii.unhexlify(raw_input).decode('utf-8')
-                    info = json.loads(decoded_str)
+                    decoded = binascii.unhexlify(raw_input).decode('utf-8')
+                    info = json.loads(decoded)
+                elif raw_input.startswith('{'):
+                    info = json.loads(raw_input)
                 else:
-                    # Fallback for raw JSON
                     import base64
-                    if raw_input.startswith('{'):
-                        info = json.loads(raw_input)
-                    else:
-                        decoded_bytes = base64.b64decode(raw_input)
-                        info = json.loads(decoded_bytes.decode('utf-8'))
+                    info = json.loads(base64.b64decode(raw_input).decode('utf-8'))
                 
-                # 2. NUCLEAR REPAIR of the Private Key
-                # This fixes the "Unable to load PEM file" error by ensuring 
-                # newlines are literal \n characters in the string.
+                # 2. SURGICAL REPAIR
                 if "private_key" in info:
-                    pk = info["private_key"]
-                    # Replace literal \n symbols with real newline characters
-                    pk = pk.replace("\\n", "\n")
-                    # Ensure it has the correct BEGIN/END markers with no extra whitespace
-                    info["private_key"] = pk.strip()
+                    info["private_key"] = normalize_pem(info["private_key"])
 
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.1 | {str(e)} | Len:{len(raw_input)}"
+                err_msg = str(e)
+                # Diagnostic snapshot
+                pk_len = len(info.get("private_key", "")) if 'info' in locals() else 0
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.2 | {err_msg} | PK_Len:{pk_len}"
         
         if not firebase_admin._apps:
             try:
