@@ -18,13 +18,22 @@ def get_db():
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
+            # CLEANING: Vercel often wraps env vars in extra quotes or mangles newlines
+            raw_info = service_account_info.strip()
+            if raw_info.startswith('"') and raw_info.endswith('"'):
+                raw_info = raw_info[1:-1]
+            
+            # Fix double-escaped newlines or literal newlines
+            raw_info = raw_info.replace('\\n', '\n').replace('\n', '\\n')
+            
             try:
-                info = json.loads(service_account_info)
+                info = json.loads(raw_info)
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                # Store error for diagnostics
-                os.environ["FIREBASE_INIT_ERROR"] = str(e)
+                # Store error with a snippet of the string for debugging
+                snippet = f"{raw_info[:50]}...{raw_info[-20:]}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"{str(e)} | Snippet: {snippet}"
                 print(f"Error loading FIREBASE_SERVICE_ACCOUNT env: {e}")
         
         # 2. Try Default Application Credentials (useful if running in Google Cloud environment)
