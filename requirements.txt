@@ -3,3 +3,5 @@ firebase-admin
 python-dotenv
 python-dateutil
 requests
+icalendar
+recurring-ical-events
