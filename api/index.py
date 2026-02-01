@@ -60,12 +60,40 @@ try:
 
         return {
             "status": "ok",
-            "version": "1.3.1",
+            "version": "1.3.2",
             "db": db_status,
             "staff_count": staff_count,
             "db_error": os.getenv("FIREBASE_INIT_ERROR", "none"),
             "environment": "vercel" if os.getenv("VERCEL") else "local"
         }
+
+    @app.post("/api/import-staff")
+    async def import_staff(data: list):
+        from backend.database_firestore import get_db
+        db = get_db()
+        if not db: return {"error": "DB not connected"}
+        
+        count = 0
+        for s in data:
+            try:
+                staff_ref = db.collection("staff").document(str(s["id"]))
+                staff_ref.set({
+                    "name": s["name"],
+                    "role": s.get("role", "Teacher"),
+                    "profile": s.get("profile"),
+                    "is_priority": s.get("is_priority", False),
+                    "is_specialist": s.get("is_specialist", False),
+                    "is_active": s.get("is_active", True),
+                    "can_cover_periods": s.get("can_cover_periods", True),
+                    "calendar_url": s.get("calendar_url")
+                })
+                if "schedules" in s:
+                    for sch in s["schedules"]:
+                        doc_id = f"{sch['day_of_week']}_{sch['period']}"
+                        staff_ref.collection("schedules").document(doc_id).set(sch)
+                count += 1
+            except: pass
+        return {"imported": count}
 except:
     pass
 
