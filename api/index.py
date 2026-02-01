@@ -50,10 +50,19 @@ try:
         except Exception as db_err:
             db_status = f"error: {str(db_err)}"
 
+        staff_count = 0
+        try:
+            from backend.database_firestore import FirestoreDB
+            staff = FirestoreDB.get_staff()
+            staff_count = len(staff)
+        except:
+            pass
+
         return {
             "status": "ok",
-            "version": "1.3.0",
+            "version": "1.3.1",
             "db": db_status,
+            "staff_count": staff_count,
             "db_error": os.getenv("FIREBASE_INIT_ERROR", "none"),
             "environment": "vercel" if os.getenv("VERCEL") else "local"
         }
