@@ -5,3 +5,5 @@ python-dotenv
 python-dateutil
 requests
 python-multipart
+icalendar
+recurring-ical-events
