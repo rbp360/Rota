@@ -4,9 +4,24 @@ import os
 from datetime import datetime
 import json
 import base64
+import re
 
 # Global variable for the firestore client
 _db = None
+
+def heal_json(s):
+    """
+    Scans for illegal backslashes in JSON and fixes them.
+    Only \", \\, \/, \b, \f, \n, \r, \t, \u are allowed.
+    """
+    def replacer(match):
+        esc = match.group(0)
+        if len(esc) < 2: return esc
+        if esc[1] in 'bfnrtu"\\\\/':
+            return esc
+        # If it's invalid (like \m or \ ), double the backslash to make it a literal backslash
+        return '\\\\' + esc[1]
+    return re.sub(r'\\\\.', replacer, s)
 
 def get_db():
     global _db
@@ -14,12 +29,11 @@ def get_db():
         return _db
         
     if not firebase_admin._apps:
-        # 1. Try to load from "FIREBASE_SERVICE_ACCOUNT" environment variable
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
             raw_info = service_account_info.strip()
-            # Remove any wrapping quotes that Vercel might have added
+            # Remove wrapping quotes
             if raw_info.startswith('"') and raw_info.endswith('"'):
                 raw_info = raw_info[1:-1]
             if raw_info.startswith("'") and raw_info.endswith("'"):
@@ -29,24 +43,38 @@ def get_db():
             
             try:
                 if detected_type == "b64":
-                    decoded = base64.b64decode(raw_info).decode('utf-8')
-                    # Apply cleaning to the decoded string too!
-                    cleaned = decoded.replace('\\\\', '\\').replace('\\n', '\n').replace('\n', '\\n')
+                    # Step 1: Decode
+                    decoded_bytes = base64.b64decode(raw_info)
+                    decoded_str = decoded_bytes.decode('utf-8')
+                    # Step 2: Heal logic
+                    # First, turn literal newlines into \n symbols
+                    cleaned = decoded_str.replace('\n', '\\n').replace('\r', '')
+                    # Then fix double escaping
+                    cleaned = cleaned.replace('\\\\n', '\\n')
                     try:
                         info = json.loads(cleaned)
                     except:
-                        # If cleaning made it worse, try the raw decoded string
-                        info = json.loads(decoded)
+                        # Fallback: Heal illegal escapes
+                        info = json.loads(heal_json(cleaned))
                 else:
-                    # Clean up mangled JSON
-                    cleaned = raw_info.replace('\\\\', '\\').replace('\\n', '\n').replace('\n', '\\n')
+                    cleaned = heal_json(raw_info.replace('\n', '\\n'))
                     info = json.loads(cleaned)
                 
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                snippet = f"{raw_info[:20]}...{raw_info[-20:]}"
-                os.environ["FIREBASE_INIT_ERROR"] = f"Type:{detected_type} | Err:{str(e)} | Snippet:{snippet}"
+                err_msg = str(e)
+                char_info = ""
+                # X-RAY: Find the exact character that failed
+                match = re.search(r'\(char (\d+)\)', err_msg)
+                if match:
+                    idx = int(match.group(1))
+                    # Use the raw string we tried to parse
+                    target = cleaned if 'cleaned' in locals() else raw_info
+                    snippet = target[max(0, idx-10):min(len(target), idx+10)]
+                    char_info = f" | At{idx}:[{snippet}]"
+                
+                os.environ["FIREBASE_INIT_ERROR"] = f"{err_msg}{char_info}"
         
         # 2. Try Default Application Credentials
         if not firebase_admin._apps:
