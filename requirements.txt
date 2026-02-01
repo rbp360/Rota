@@ -1,7 +1,5 @@
 fastapi
-python-dotenv
-google-generativeai
 firebase-admin
-icalendar
-recurring-ical-events
+python-dotenv
 python-dateutil
+requests

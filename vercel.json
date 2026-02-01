@@ -15,5 +15,12 @@
             "source": "/(.*)",
             "destination": "/index.html"
         }
+    ],
+    "ignore_patterns": [
+        "frontend/**",
+        "data_archive/**",
+        "*.xlsx",
+        "*.db",
+        "*.ics"
     ]
 }
