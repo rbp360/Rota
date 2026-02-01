@@ -16,33 +16,39 @@ def get_db():
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
         if service_account_info:
-            # CLEANING: Remove ALL whitespace/newlines from the raw input
-            raw_input = "".join(service_account_info.split())
-            
-            # Remove any wrapping quotes
+            # Clean input
+            raw_input = "".join(service_account_info.split()).strip()
             if raw_input.startswith(('"', "'")) and raw_input.endswith(('"', "'")):
                 raw_input = raw_input[1:-1]
 
             try:
-                # 1. Try to see if it's HEX (All 0-9, a-f)
+                # 1. Decode the Hex
                 if all(c in '0123456789abcdefABCDEF' for c in raw_input) and len(raw_input) > 500:
                     decoded_str = binascii.unhexlify(raw_input).decode('utf-8')
                     info = json.loads(decoded_str)
                 else:
-                    # 2. Try standard JSON/Base64 handling (Fallback)
+                    # Fallback for raw JSON
                     import base64
                     if raw_input.startswith('{'):
-                        cleaned = raw_input.replace('\n', '\\n').replace('\r', '')
-                        info = json.loads(cleaned)
+                        info = json.loads(raw_input)
                     else:
                         decoded_bytes = base64.b64decode(raw_input)
                         info = json.loads(decoded_bytes.decode('utf-8'))
                 
+                # 2. NUCLEAR REPAIR of the Private Key
+                # This fixes the "Unable to load PEM file" error by ensuring 
+                # newlines are literal \n characters in the string.
+                if "private_key" in info:
+                    pk = info["private_key"]
+                    # Replace literal \n symbols with real newline characters
+                    pk = pk.replace("\\n", "\n")
+                    # Ensure it has the correct BEGIN/END markers with no extra whitespace
+                    info["private_key"] = pk.strip()
+
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                snippet = f"{raw_input[:20]}...{raw_input[-20:]}"
-                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.0 | {str(e)} | Len:{len(raw_input)} | Snippet:{snippet}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.2.1 | {str(e)} | Len:{len(raw_input)}"
         
         if not firebase_admin._apps:
             try:
@@ -55,7 +61,7 @@ def get_db():
             _db = firestore.client()
             return _db
     except Exception as e:
-        print(f"CRITICAL: Could not initialize Firestore client: {e}")
+        print(f"CRITICAL: {e}")
         return None
     return None
 
