@@ -30,7 +30,28 @@ def get_ai():
             return None
     return _ai
 
-# --- BULK IMPORT (The Bridge) ---
+# API Endpoints
+@app.get("/api/health")
+def health_check():
+    db_status = "unknown"
+    staff_count = 0
+    try:
+        from .database_firestore import get_db, FirestoreDB
+        db = get_db()
+        db_status = "connected" if db else "failed"
+        if db:
+            staff_count = len(FirestoreDB.get_staff())
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "ok",
+        "version": "1.6.3",
+        "db": db_status,
+        "staff_count": staff_count,
+        "environment": "vercel"
+    }
+
 @app.post("/api/import-staff")
 async def import_staff_bridge(request: Request):
     try:
