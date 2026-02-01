@@ -6,7 +6,7 @@ from backend.database import Base, Staff, Schedule, Absence, Cover
 from backend.database_firestore import db, firestore
 
 # Setup SQLite
-SQLALCHEMY_DATABASE_URL = "sqlite:///./rota.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./data_archive/rota.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 session = SessionLocal()

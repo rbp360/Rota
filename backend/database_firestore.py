@@ -3,7 +3,7 @@ from firebase_admin import credentials, firestore
 import os
 import json
 
-# Global variable for the firestore client
+# Global variables
 _db = None
 
 def get_db():
@@ -12,16 +12,14 @@ def get_db():
         return _db
         
     if not firebase_admin._apps:
-        # 1. Try Individual Variables (The most stable method for Vercel)
+        # 1. Individual Variables (Vercel)
         pk = os.getenv("FIREBASE_PRIVATE_KEY")
         email = os.getenv("FIREBASE_CLIENT_EMAIL")
         project_id = os.getenv("FIREBASE_PROJECT_ID")
         
         if pk and email and project_id:
             try:
-                # Clean the private key: replace literal \n with real newlines
                 clean_pk = pk.replace("\\n", "\n").strip()
-                # If it's wrapped in quotes, strip them
                 if clean_pk.startswith('"') and clean_pk.endswith('"'):
                     clean_pk = clean_pk[1:-1]
                 
@@ -35,24 +33,19 @@ def get_db():
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                os.environ["FIREBASE_INIT_ERROR"] = f"v1.3.0 | Individual Vars Failed: {str(e)}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.3.1 | Individual Vars Failed: {str(e)}"
 
-        # 2. Fallback to the old JSON blob (if still set)
+        # 2. Local JSON File (Development)
         if not firebase_admin._apps:
-            service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
-            if service_account_info:
+            # Look for the specific json file in the root
+            possible_path = os.path.join(os.getcwd(), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
+            if os.path.exists(possible_path):
                 try:
-                    # Very basic JSON load
-                    raw = service_account_info.strip()
-                    if raw.startswith('"') and raw.endswith('"'): raw = raw[1:-1]
-                    info = json.loads(raw)
-                    if "private_key" in info:
-                        info["private_key"] = info["private_key"].replace("\\n", "\n")
-                    cred = credentials.Certificate(info)
+                    cred = credentials.Certificate(possible_path)
                     firebase_admin.initialize_app(cred)
                 except Exception as e:
-                    os.environ["FIREBASE_INIT_ERROR"] = f"v1.3.0 | JSON Fallback Failed: {str(e)}"
-        
+                    print(f"Failed to load local firebase key: {e}")
+
         # 3. Last resort: Default credentials
         if not firebase_admin._apps:
             try:
@@ -64,17 +57,26 @@ def get_db():
         if firebase_admin._apps:
             _db = firestore.client()
             return _db
-    except Exception as e:
-        print(f"CRITICAL: {e}")
-        return None
+    except:
+        pass
     return None
+
+# For backward compatibility with migration scripts
+@property
+def db():
+    return get_db()
+
+# We need a real 'db' object at the top level for migration scripts that do 'from ... import db'
+# But since get_db might fail initially, we can't just set it once at import time.
+# However, many scripts expect it. Let's provide a proxy or just initialize it.
+db = get_db()
 
 class FirestoreDB:
     @staticmethod
     def get_staff():
-        db = get_db()
-        if not db: return []
-        docs = db.collection("staff").stream()
+        database = get_db()
+        if not database: return []
+        docs = database.collection("staff").stream()
         staff_list = []
         for doc in docs:
             data = doc.to_dict()
@@ -84,16 +86,16 @@ class FirestoreDB:
 
     @staticmethod
     def get_staff_member(staff_id=None, name=None):
-        db = get_db()
-        if not db: return None
+        database = get_db()
+        if not database: return None
         if staff_id:
-            doc = db.collection("staff").document(staff_id).get()
+            doc = database.collection("staff").document(staff_id).get()
             if doc.exists:
                 data = doc.to_dict()
                 data["id"] = doc.id
                 return data
         if name:
-            docs = db.collection("staff").where("name", "==", name).limit(1).stream()
+            docs = database.collection("staff").where("name", "==", name).limit(1).stream()
             for doc in docs:
                 data = doc.to_dict()
                 data["id"] = doc.id
@@ -102,9 +104,9 @@ class FirestoreDB:
 
     @staticmethod
     def get_schedules(staff_id, day=None):
-        db = get_db()
-        if not db: return []
-        query = db.collection("staff").document(staff_id).collection("schedules")
+        database = get_db()
+        if not database: return []
+        query = database.collection("staff").document(staff_id).collection("schedules")
         if day:
             query = query.where("day_of_week", "==", day)
         
@@ -116,9 +118,9 @@ class FirestoreDB:
 
     @staticmethod
     def add_absence(staff_id, staff_name, date, start_period, end_period):
-        db = get_db()
-        if not db: return None
-        absence_ref = db.collection("absences").document()
+        database = get_db()
+        if not database: return None
+        absence_ref = database.collection("absences").document()
         absence_data = {
             "staff_id": staff_id,
             "staff_name": staff_name,
@@ -132,9 +134,9 @@ class FirestoreDB:
 
     @staticmethod
     def get_absences(date=None, staff_id=None):
-        db = get_db()
-        if not db: return []
-        query = db.collection("absences")
+        database = get_db()
+        if not database: return []
+        query = database.collection("absences")
         if date:
             query = query.where("date", "==", date)
         if staff_id:
@@ -145,16 +147,16 @@ class FirestoreDB:
         for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
-            covers_docs = db.collection("absences").document(doc.id).collection("covers").stream()
+            covers_docs = database.collection("absences").document(doc.id).collection("covers").stream()
             data["covers"] = [c.to_dict() for c in covers_docs]
             absences.append(data)
         return absences
 
     @staticmethod
     def assign_cover(absence_id, staff_id, staff_name, period):
-        db = get_db()
-        if not db: return False
-        cover_ref = db.collection("absences").document(absence_id).collection("covers").document(str(period))
+        database = get_db()
+        if not database: return False
+        cover_ref = database.collection("absences").document(absence_id).collection("covers").document(str(period))
         cover_data = {
             "covering_staff_id": staff_id,
             "covering_staff_name": staff_name,
@@ -166,7 +168,7 @@ class FirestoreDB:
 
     @staticmethod
     def unassign_cover(absence_id, period):
-        db = get_db()
-        if not db: return False
-        db.collection("absences").document(absence_id).collection("covers").document(str(period)).delete()
+        database = get_db()
+        if not database: return False
+        database.collection("absences").document(absence_id).collection("covers").document(str(period)).delete()
         return True
