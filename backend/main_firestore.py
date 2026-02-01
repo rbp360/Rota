@@ -46,7 +46,7 @@ def health_check():
     
     return {
         "status": "ok",
-        "version": "1.6.3",
+        "version": "1.8.0",
         "db": db_status,
         "staff_count": staff_count,
         "environment": "vercel"
