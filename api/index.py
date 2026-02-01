@@ -1,17 +1,11 @@
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from http.server import BaseHTTPRequestHandler
 
-app = FastAPI()
-
-@app.get("/api/health")
-async def health():
-    return {
-        "status": "baseline_test",
-        "version": "1.3.7"
-    }
-
-@app.get("/api/{path:path}")
-async def catch_all(path: str):
-    return {"message": f"Path {path} works in baseline mode."}
-
-handler = app
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        import os
+        import sys
+        self.wfile.write(bytes('{"status":"extreme_baseline", "python":"' + sys.version + '"}', "utf-8"))
+        return
