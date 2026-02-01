@@ -1,11 +1,6 @@
 {
     "version": 2,
     "outputDirectory": "frontend/dist",
-    "functions": {
-        "api/index.py": {
-            "includeFiles": "backend/**"
-        }
-    },
     "rewrites": [
         {
             "source": "/api/(.*)",
