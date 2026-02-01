@@ -1,3 +1,8 @@
 fastapi
-python-multipart
+firebase-admin
+python-dotenv
+python-dateutil
 requests
+icalendar
+recurring-ical-events
+python-multipart
