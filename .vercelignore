@@ -1,4 +1,4 @@
-# Exclude large data and tool files
+# Large data and tool files
 *.xlsx
 *.db
 *.ics
@@ -9,19 +9,21 @@
 *.pyc
 __pycache__/
 
-# Exclude all top-level Python tools (not needed for deployment)
+# Archive
+data_archive/
+
+# Exclude root-level Python tools from the function
 /*.py
 !/api/
 !/backend/
 
-# Essential Folders (Keep these for the build)
-# .git/ is ignored by default
+# Folders not needed for the serverless function bundle
+# (But Vite will still have access to them during the build step)
+node_modules/
+.git/
 .vercel/
 .firebase/
-node_modules/
-# Do NOT ignore frontend/src or frontend/public, Vite needs them!
 frontend/node_modules/
-
-# Configuration
-package-lock.json
-frontend/package-lock.json
+frontend/src/
+frontend/public/
+frontend/dist/

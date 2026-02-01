@@ -1,4 +1,9 @@
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+    HAS_GENAI = True
+except ImportError:
+    HAS_GENAI = False
+
 import os
 from dotenv import load_dotenv
 
@@ -6,14 +11,19 @@ load_dotenv()
 
 # Configure Google AI Studio API Key
 API_KEY = os.getenv("GOOGLE_AI_KEY")
-if API_KEY:
+if API_KEY and HAS_GENAI:
     genai.configure(api_key=API_KEY)
 
 class RotaAI:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-flash-latest')
+        if HAS_GENAI:
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+        else:
+            self.model = None
 
     def suggest_cover(self, absent_staff, day, periods, available_staff_profiles):
+        if not HAS_GENAI:
+            return "Error: AI SDK (google-generativeai) is not installed. Please contact administrator to fix deployment size issues."
         if not os.getenv("GOOGLE_AI_KEY"):
             return "Error: GOOGLE_AI_KEY not found in environment."
 
@@ -51,6 +61,8 @@ class RotaAI:
             return f"Error: Failed to generate AI content. {str(e)}"
 
     def generate_report(self, query, data_context):
+        if not HAS_GENAI:
+            return "Error: AI SDK (google-generativeai) is not installed."
         if not os.getenv("GOOGLE_AI_KEY"):
             return "Error: GOOGLE_AI_KEY not found in environment."
 
