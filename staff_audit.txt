@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "c:\Users\rob_b\Rota\check_staff.py", line 24, in <module>
-    check_staff()
-    ~~~~~~~~~~~^^
-  File "c:\Users\rob_b\Rota\check_staff.py", line 17, in check_staff
-    with open("staff_audit.txt", "w") as f:
-         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^
-PermissionError: [Errno 13] Permission denied: 'staff_audit.txt'

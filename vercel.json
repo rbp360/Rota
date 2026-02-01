@@ -2,8 +2,8 @@
     "version": 2,
     "outputDirectory": "frontend/dist",
     "functions": {
-        "api/*.py": {
-            "excludeFiles": "frontend/**"
+        "api/index.py": {
+            "includeFiles": "backend/**"
         }
     },
     "rewrites": [
