@@ -9,19 +9,6 @@ import re
 # Global variable for the firestore client
 _db = None
 
-def heal_json(s):
-    r"""
-    Scans for illegal backslashes in JSON and fixes them.
-    """
-    def replacer(match):
-        esc = match.group(0)
-        if len(esc) < 2: return esc
-        if esc[1] in 'bfnrtu"\\/':
-            return esc
-        # If it's invalid (like \m or \ ), double the backslash to make it a literal backslash
-        return '\\\\' + esc[1]
-    return re.sub(r'\\.', replacer, s)
-
 def get_db():
     global _db
     if _db is not None:
@@ -43,37 +30,27 @@ def get_db():
             try:
                 if detected_type == "b64":
                     decoded_bytes = base64.b64decode(raw_info)
-                    decoded_str = decoded_bytes.decode('utf-8')
-                    # First, turn literal newlines into \n symbols
-                    cleaned = decoded_str.replace('\n', '\\n').replace('\r', '')
-                    # Then fix double escaping
-                    cleaned = cleaned.replace('\\\\n', '\\n')
-                    try:
-                        info = json.loads(cleaned)
-                    except:
-                        info = json.loads(heal_json(cleaned))
+                    info = json.loads(decoded_bytes.decode('utf-8'))
                 else:
-                    # Fix literal newlines in raw json
+                    # Clean up literal newlines in raw json
                     cleaned = raw_info.replace('\n', '\\n').replace('\r', '')
-                    try:
-                        info = json.loads(cleaned)
-                    except:
-                        info = json.loads(heal_json(cleaned))
+                    info = json.loads(cleaned)
                 
+                # DIAGNOSTICS
+                if isinstance(info, dict):
+                    keys = list(info.keys())
+                    found_type = str(info.get("type", "MISSING"))
+                    if found_type != "service_account":
+                        os.environ["FIREBASE_INIT_ERROR"] = f"WrongType:[{found_type}] | Keys:{keys}"
+                        return None
+                else:
+                    os.environ["FIREBASE_INIT_ERROR"] = f"NotADict: {type(info)}"
+                    return None
+
                 cred = credentials.Certificate(info)
                 firebase_admin.initialize_app(cred)
             except Exception as e:
-                err_msg = str(e)
-                char_info = ""
-                # Use the last attempted string
-                target = cleaned if 'cleaned' in locals() else raw_info
-                match = re.search(r'\(char (\d+)\)', err_msg)
-                if match:
-                    idx = int(match.group(1))
-                    snippet = target[max(0, idx-15):min(len(target), idx+15)]
-                    char_info = f" | At{idx}:[{snippet}]"
-                
-                os.environ["FIREBASE_INIT_ERROR"] = f"{err_msg}{char_info}"
+                os.environ["FIREBASE_INIT_ERROR"] = f"Err:{str(e)} | Type:{detected_type} | Len:{len(raw_info)}"
         
         if not firebase_admin._apps:
             try:
