@@ -2,8 +2,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 from datetime import datetime
-
 import json
+import base64
 
 # Global variable for the firestore client
 _db = None
@@ -17,8 +17,7 @@ def get_db():
         # 1. Try to load from "FIREBASE_SERVICE_ACCOUNT" environment variable
         service_account_info = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         
-            # Detect if it's Base64 or Raw JSON
-            import base64
+        if service_account_info:
             raw_info = service_account_info.strip()
             detected_type = "b64" if not raw_info.startswith('{') else "json"
             
@@ -42,22 +41,12 @@ def get_db():
                 snippet = f"{raw_info[:20]}...{raw_info[-20:]}"
                 os.environ["FIREBASE_INIT_ERROR"] = f"Type:{detected_type} | Err:{str(e)} | Len:{len(raw_info)} | Snippet:{snippet}"
         
-        # 2. Try Default Application Credentials (useful if running in Google Cloud environment)
+        # 2. Try Default Application Credentials
         if not firebase_admin._apps:
             try:
                 firebase_admin.initialize_app()
             except:
                 pass
-
-        # 3. Fallback to local file if not already initialized
-        if not firebase_admin._apps:
-            SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
-            if os.path.exists(SERVICE_ACCOUNT_PATH):
-                try:
-                    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-                    firebase_admin.initialize_app(cred)
-                except Exception as e:
-                    print(f"Error loading local service account: {e}")
     
     try:
         _db = firestore.client()
@@ -115,7 +104,6 @@ class FirestoreDB:
     def add_absence(staff_id, staff_name, date, start_period, end_period):
         db = get_db()
         if not db: return None
-        # date should be string "YYYY-MM-DD"
         absence_ref = db.collection("absences").document()
         absence_data = {
             "staff_id": staff_id,
@@ -143,7 +131,6 @@ class FirestoreDB:
         for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
-            # Fetch covers
             covers_docs = db.collection("absences").document(doc.id).collection("covers").stream()
             data["covers"] = [c.to_dict() for c in covers_docs]
             absences.append(data)
