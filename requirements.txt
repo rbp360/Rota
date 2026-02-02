@@ -1,9 +1,2 @@
 fastapi
-google-cloud-firestore
-google-auth
-python-dotenv
-python-dateutil
-requests
 python-multipart
-icalendar
-recurring-ical-events
