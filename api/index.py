@@ -11,8 +11,10 @@ app = FastAPI()
 async def health_check():
     return {
         "status": "nested_mode",
-        "version": "1.8.4",
-        "info": "Attempting to load backend from api/backend/ folder."
+        "version": "1.8.5",
+        "info": "Checking for backend folder...",
+        "backend_exists": os.path.exists(os.path.join(os.path.dirname(__file__), "backend")),
+        "sys_path": sys.path
     }
 
 # 2. NESTED IMPORT
