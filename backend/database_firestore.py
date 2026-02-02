@@ -121,3 +121,47 @@ class FirestoreDB:
                 absences.append(data)
             return absences
         except: return []
+
+    @staticmethod
+    def add_absence(staff_id, staff_name, date, start_period, end_period):
+        database = get_db()
+        if not database: return None
+        try:
+            doc_ref = database.collection("absences").document()
+            doc_ref.set({
+                "staff_id": staff_id,
+                "staff_name": staff_name,
+                "date": date,
+                "start_period": start_period,
+                "end_period": end_period
+            })
+            return doc_ref.id
+        except: return None
+
+    @staticmethod
+    def assign_cover(absence_id, staff_name, periods):
+        database = get_db()
+        if not database: return False
+        try:
+            if isinstance(periods, str):
+                plist = [int(p) for p in periods.split(',') if p]
+            else:
+                plist = periods
+                
+            parent_ref = database.collection("absences").document(absence_id)
+            for p in plist:
+                parent_ref.collection("covers").document(str(p)).set({
+                    "period": p,
+                    "staff_name": staff_name
+                })
+            return True
+        except: return False
+
+    @staticmethod
+    def unassign_cover(absence_id, period):
+        database = get_db()
+        if not database: return False
+        try:
+            database.collection("absences").document(absence_id).collection("covers").document(str(period)).delete()
+            return True
+        except: return False
