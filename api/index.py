@@ -1,13 +1,32 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import sys
+import os
+import traceback
+
+# Force root path
+root_dir = "/var/task"
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 app = FastAPI()
 
 @app.get("/api/health")
 async def health():
-    return {"status": "v2.3.1-zero_config"}
+    return {
+        "status": "v2.3.2-production",
+        "msg": "Waiting for data sync."
+    }
 
-@app.get("/api")
-async def root():
-    return {"status": "alive", "version": "2.3.1"}
+@app.post("/api/import-staff")
+async def handle_import(request: Request):
+    try:
+        from backend.main_firestore import import_staff_bridge
+        return await import_staff_bridge(request)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "trace": traceback.format_exc()}
+        )
 
 app = app
