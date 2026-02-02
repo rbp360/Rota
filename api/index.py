@@ -1,10 +1,10 @@
-from fastapi import FastAPI
+from http.server import BaseHTTPRequestHandler
+import json
 
-app = FastAPI()
-
-@app.get("/api/health")
-async def health():
-    return {"status": "baseline_v193", "msg": "Zero Config Test"}
-
-# For Vercel
-app = app
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "raw_python_v194"}).encode())
+        return
