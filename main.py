@@ -54,9 +54,10 @@ def test_db():
     db = get_db()
     if not db: return {"status": "fail", "msg": "Could not init"}
     try:
-        # Simplest possible check: list collections (very low memory)
-        collections = db.collections()
-        return {"status": "connected", "collections_found": True}
+        # Import firestore here for the SERVER_TIMESTAMP
+        from google.cloud import firestore
+        db.collection("system").document("ping").set({"last_ping": firestore.SERVER_TIMESTAMP})
+        return {"status": "connected", "write_test": "passed"}
     except Exception as e:
         return {"status": "error", "msg": str(e)}
 
@@ -81,7 +82,8 @@ async def handle_import(request: Request):
         batch.commit()
         return {"imported": len(data)}
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        import traceback
+        return JSONResponse(status_code=500, content={"error": str(e), "trace": traceback.format_exc()})
 
 @app.get("/api/staff")
 def get_staff():
@@ -91,4 +93,6 @@ def get_staff():
         # Limited stream to save memory
         docs = db.collection("staff").limit(10).stream()
         return [{"id": d.id, "name": d.to_dict().get("name")} for d in docs]
-    except: return []
+    except Exception as e:
+        print(f"Get Staff Error: {e}")
+        return []
