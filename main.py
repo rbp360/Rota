@@ -1,12 +1,8 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import sys
 import os
 import traceback
-
-# Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 app = FastAPI(title="RotaAI Render API")
 
@@ -18,62 +14,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. ROOT STATUS
+def get_lean_db():
+    print("[DB] Attempting lean connection...")
+    from google.cloud import firestore
+    from google.oauth2 import service_account
+    
+    pk = os.getenv("FIREBASE_PRIVATE_KEY")
+    email = os.getenv("FIREBASE_CLIENT_EMAIL")
+    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    
+    if not (pk and email and project_id):
+        print("[DB] Missing basic env variables")
+        return None
+        
+    try:
+        # SUPER CLEANER
+        # 1. Strip all potential literal quotes
+        clean_pk = pk.strip().strip('"').strip("'")
+        
+        # 2. If it contains literal \n (backslash + n), replace it
+        if "\\n" in clean_pk:
+            clean_pk = clean_pk.replace("\\n", "\n")
+            
+        # 3. Final verification - join lines to remove accidental empty ones
+        lines = [l.strip() for l in clean_pk.split("\n") if l.strip()]
+        clean_pk = "\n".join(lines)
+        
+        if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
+            print("[DB] Key header missing from cleaned string")
+            return None
+            
+        creds = service_account.Credentials.from_service_account_info({
+            "project_id": project_id,
+            "private_key": clean_pk,
+            "client_email": email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "type": "service_account"
+        })
+        db = firestore.Client(credentials=creds, project=project_id)
+        print("[DB] Client created successfully")
+        return db
+    except Exception as e:
+        print(f"[DB] Crash during auth setup: {e}")
+        return None
+
 @app.get("/")
 def root():
-    return {
-        "status": "online", 
-        "message": "RotaAI is running on Render!", 
-        "version": "4.8.0",
-        "hint": "Check /api/health for DB status"
-    }
+    return {"status": "online", "version": "4.8.1", "msg": "Standalone Logic"}
 
-# 2. HEALTH CHECK (Robust Handshake)
 @app.get("/api/health")
 def health():
-    info = {"status": "online", "version": "4.8.0", "platform": "Render"}
+    info = {"status": "online", "version": "4.8.1"}
     try:
-        from backend.database_firestore import get_db
-        print("[HEALTH] Checking DB connection...")
-        db = get_db()
+        db = get_lean_db()
         if db:
-            # Quick real read check
+            info["db_init"] = "success"
+            # Tiny network probe
             try:
-                db.collection("staff").limit(1).get(timeout=5)
-                info["db"] = "connected_and_verified"
-                print("[HEALTH] DB verified.")
-            except Exception as e:
-                info["db"] = "connected_but_no_response"
-                info["db_error"] = str(e)
-                print(f"[HEALTH] DB verify failed: {e}")
+                db.collection("staff").limit(1).get(timeout=10)
+                info["db_net"] = "verified"
+            except Exception as net_e:
+                info["db_net"] = f"Network Check Failed: {str(net_e)}"
         else:
-            info["db"] = "initialization_failed"
-            info["error"] = os.environ.get("FIREBASE_INIT_ERROR", "No init error logged")
-            print("[HEALTH] DB init failed.")
+            info["db_init"] = "failed"
     except Exception as e:
-        info["status"] = "unstable"
-        info["error"] = str(e)
-        print(f"[HEALTH] Crash: {e}")
+        info["crash"] = str(e)
     return info
 
-# 3. IMPORT DATA BRIDGE (Batch mode for speed)
 @app.post("/api/import-staff")
 async def handle_import(request: Request):
     try:
         data = await request.json()
-        print(f"[IMPORT] Processing {len(data)} items...")
-        
-        from backend.database_firestore import get_db
-        db = get_db()
+        db = get_lean_db()
         if not db:
-            return JSONResponse(status_code=500, content={"error": "Database not connected."})
+            return JSONResponse(status_code=500, content={"error": "Database could not initialize."})
         
         count = 0
         batch = db.batch()
-        
         for i, s in enumerate(data):
             staff_ref = db.collection("staff").document(str(s["id"]))
-            # Upsert staff
             batch.set(staff_ref, {
                 "name": s["name"],
                 "role": s.get("role", "Teacher"),
@@ -84,79 +103,23 @@ async def handle_import(request: Request):
                 "can_cover_periods": s.get("can_cover_periods", True),
                 "calendar_url": s.get("calendar_url")
             })
-            
-            # Schedules
             if "schedules" in s:
                 for sch in s["schedules"]:
-                    sch_ref = staff_ref.collection("schedules").document(f"{sch['day_of_week']}_{sch['period']}")
-                    batch.set(sch_ref, sch)
-            
+                    batch.set(staff_ref.collection("schedules").document(f"{sch['day_of_week']}_{sch['period']}"), sch)
             count += 1
-            # Commit every 10 to keep batch size manageable
             if i % 10 == 0 and i > 0:
                 batch.commit()
                 batch = db.batch()
-        
         batch.commit()
-        print(f"[IMPORT] SUCCESS: {count} teachers processed.")
         return {"imported": count}
-        
     except Exception as e:
-        print(f"[IMPORT] CRASH: {e}")
         return JSONResponse(status_code=500, content={"error": str(e), "trace": traceback.format_exc()})
 
-# 4. CORE API ROUTES (Lazy Loaded)
 @app.get("/api/staff")
-def get_all_staff():
-    from backend.database_firestore import FirestoreDB
-    return FirestoreDB.get_staff()
-
-@app.get("/api/daily-rota")
-def get_daily_rota(date: str):
-    from backend.database_firestore import FirestoreDB
-    from dateutil import parser
-    target_date = parser.parse(date).strftime('%Y-%m-%d')
-    return FirestoreDB.get_absences(date=target_date)
-
-@app.post("/api/absences")
-def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
-    from backend.database_firestore import FirestoreDB
-    from dateutil import parser
-    staff = FirestoreDB.get_staff_member(name=staff_name)
-    if not staff:
-        raise HTTPException(status_code=404, detail=f"Staff '{staff_name}' not found")
-    target_date = parser.parse(date).strftime('%Y-%m-%d')
-    absence_id = FirestoreDB.add_absence(staff["id"], staff["name"], target_date, start_period, end_period)
-    return {"id": absence_id, "status": "created"}
-
-@app.get("/api/suggest-cover/{absence_id}")
-async def suggest_cover(absence_id: str, day: str = "Monday"):
-    from backend.database_firestore import FirestoreDB
+def get_staff():
+    db = get_lean_db()
+    if not db: return []
     try:
-        absences = FirestoreDB.get_absences()
-        absence = next((a for a in absences if a["id"] == absence_id), None)
-        if not absence:
-            raise HTTPException(status_code=404, detail="Absence not found")
-        
-        from backend.ai_agent import RotaAI
-        ai = RotaAI()
-        all_staff = FirestoreDB.get_staff()
-        
-        available_profiles = []
-        for s in all_staff:
-            if s["id"] == absence["staff_id"]: continue
-            s_schedules = FirestoreDB.get_schedules(s["id"], day=day)
-            available_profiles.append({
-                "name": s["name"], "role": s.get("role", "Teacher"),
-                "is_priority": s.get("is_priority", False),
-                "free_periods": [sch["period"] for sch in s_schedules if sch["is_free"]]
-            })
-
-        ai_response = ai.suggest_cover(
-            absent_staff=absence["staff_name"], day=day,
-            periods=[absence["start_period"]],
-            available_staff_profiles=available_profiles
-        )
-        return {"suggestions": ai_response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        docs = db.collection("staff").stream()
+        return [{**doc.to_dict(), "id": doc.id} for doc in docs]
+    except: return []
