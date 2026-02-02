@@ -8,13 +8,13 @@ app = FastAPI()
 def root():
     return {
         "status": "online",
-        "version": "4.6.1",
-        "msg": "Minimal Firestore Build"
+        "version": "4.6.2",
+        "msg": "Minimal Firestore Build (+Gunicorn)"
     }
 
 @app.get("/api/health")
 def health():
-    info = {"status": "ok", "version": "4.6.1"}
+    info = {"status": "ok", "version": "4.6.2"}
     try:
         from google.cloud import firestore
         from google.oauth2 import service_account
