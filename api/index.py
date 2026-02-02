@@ -1,29 +1,13 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import sys
-import os
+from fastapi import FastAPI
 
 app = FastAPI()
 
 @app.get("/api/health")
 async def health():
-    return {
-        "status": "online",
-        "version": "2.2.4",
-        "msg": "Libraries loaded, standing by for database signal."
-    }
+    return {"status": "ok", "version": "2.2.5"}
 
-@app.post("/api/import-staff")
-async def handle_import(request: Request):
-    try:
-        data = await request.json()
-        from backend.main_firestore import import_staff_bridge
-        return await import_staff_bridge(request)
-    except Exception as e:
-        import traceback
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e), "trace": traceback.format_exc()}
-        )
+@app.all("/api/{path:path}")
+async def catch_all(path: str):
+    return {"path": path}
 
 app = app
