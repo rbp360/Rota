@@ -14,21 +14,13 @@ app.add_middleware(
 )
 
 @app.get("/")
-async def root():
-    return {"status": "online", "message": "Render is responding!"}
+def read_root():
+    return {"status": "online", "message": "Render is responding!", "version": "4.0.2"}
 
 @app.get("/health")
-async def health():
-    return {
-        "status": "online",
-        "version": "4.0.1",
-        "msg": "I AM RESPONDING WITHOUT THE API PREFIX."
-    }
+def read_health():
+    return {"status": "ok", "msg": "Sync tests beginning"}
 
 @app.post("/import-staff")
-async def importer(request: Request):
-    return {"msg": "Importer reached"}
-
-@app.all("/{path:path}")
-async def catch_all(path: str):
-    return {"path": path, "msg": "Catch-all reached"}
+def importer():
+    return {"msg": "Importer hit"}
