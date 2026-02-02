@@ -1,13 +1,23 @@
-from fastapi import FastAPI
+from http.server import BaseHTTPRequestHandler
+import json
 
-app = FastAPI()
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "raw_server_v228",
+            "msg": "Back to basics."
+        }).encode())
+        return
 
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "version": "2.2.5"}
-
-@app.all("/api/{path:path}")
-async def catch_all(path: str):
-    return {"path": path}
-
-app = app
+    def do_POST(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "raw_post_v228",
+            "msg": "POST received."
+        }).encode())
+        return
