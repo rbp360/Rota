@@ -8,13 +8,13 @@ app = FastAPI()
 def root():
     return {
         "status": "online",
-        "version": "4.6.2",
-        "msg": "Minimal Firestore Build (+Gunicorn)"
+        "version": "4.6.3",
+        "msg": "Minimal Firestore Build (+Gunicorn +StandardUvicorn)"
     }
 
 @app.get("/api/health")
 def health():
-    info = {"status": "ok", "version": "4.6.2"}
+    info = {"status": "ok", "version": "4.6.3"}
     try:
         from google.cloud import firestore
         from google.oauth2 import service_account
@@ -39,8 +39,15 @@ def health():
                 "type": "service_account"
             })
             db = firestore.Client(credentials=creds, project=project_id)
-            db.collection("staff").limit(1).get()
-            info["db"] = "connected_and_verified"
+            # DUMMY TEST WITHOUT HANDSHAKE TO PREVENT SHUTDOWN
+            info["db_client"] = "initialized"
+            # Try a read but wrap it in its own try to see if it causes the crash
+            try:
+                # Use a timeout on the Firestore request
+                db.collection("staff").limit(1).get(timeout=5)
+                info["db_net"] = "verified"
+            except Exception as net_e:
+                info["db_net"] = f"net_error: {str(net_e)}"
         else:
             info["db"] = "missing_env"
     except Exception as e:
