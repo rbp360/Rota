@@ -1,10 +1,15 @@
-from fastapi import FastAPI
+from http.server import BaseHTTPRequestHandler
+import json
+import os
 
-app = FastAPI()
-
-@app.get("/api/health")
-async def health():
-    return {"status": "direct_check", "version": "2.0.1"}
-
-# Vercel will map this to /api/health if the folder is 'api'
-app = app
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "raw_v202",
+            "cwd": os.getcwd(),
+            "env": os.environ.get("VERCEL_ENV", "local")
+        }).encode())
+        return
