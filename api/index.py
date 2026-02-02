@@ -4,40 +4,38 @@ import sys
 import os
 import traceback
 
-# Root path for backend folder
+# FORCE PATH - Ensure backend is visible
 root_dir = "/var/task"
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-app = FastAPI(title="RotaAI School API")
+app = FastAPI()
 
 @app.get("/api/health")
 async def health():
-    db_status = "idle"
-    # We do NOT import database here to keep the health check ultra fast.
     return {
-        "status": "online",
-        "version": "2.2.0",
-        "db": db_status,
-        "note": "School Rota API is live. Run push_to_cloud.py to sync data."
+        "status": "v2.2.1-power_on",
+        "msg": "I am awake and waiting for data."
     }
 
 @app.post("/api/import-staff")
 async def handle_import(request: Request):
+    """
+    Surgical Import: Load NOTHING unless this is called.
+    """
+    print("DEBUG: Import request received")
     try:
-        # Complex imports happen ONLY here
+        # Load heavy logic only inside the call
         from backend.main_firestore import import_staff_bridge
         return await import_staff_bridge(request)
     except Exception as e:
+        err_msg = str(e)
+        stack = traceback.format_exc()
+        print(f"CRITICAL ERROR: {err_msg}")
         return JSONResponse(
             status_code=500,
-            content={"error": str(e), "trace": traceback.format_exc()}
+            content={"error": err_msg, "trace": stack}
         )
 
-# Catch-all to help with routing
-@app.get("/api/{path:path}")
-async def catch_all(path: str):
-    return {"message": f"Endpoint '/api/{path}' reached. Use /api/health for status."}
-
-# Standard export
+# Standard export for Vercel
 app = app
