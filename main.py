@@ -24,31 +24,30 @@ def root():
     return {
         "status": "online", 
         "message": "RotaAI is running on Render!", 
-        "version": "4.3.0",
+        "version": "4.4.0",
         "hint": "Check /api/health for DB status"
     }
 
-# 2. HEALTH CHECK (Now with REAL network test)
+# 2. HEALTH CHECK
 @app.get("/api/health")
 def health():
-    info = {"status": "online", "version": "4.3.0", "platform": "Render"}
+    info = {"status": "online", "version": "4.4.0", "platform": "Render"}
     try:
-        from backend.database_firestore import get_db, FirestoreDB
+        from backend.database_firestore import get_db
+        print("Health check: fetching DB...")
         db = get_db()
         if db:
-            # REAL NETWORK TEST - Try to list collections or a dummy doc
-            try:
-                db.collection("staff").limit(1).get()
-                info["db"] = "connected_and_authenticated"
-            except Exception as auth_err:
-                info["db"] = "connected_but_auth_failed"
-                info["auth_error"] = str(auth_err)
+            info["db"] = "connected"
+            # Quick network sanity check
+            db.collection("staff").limit(1).get()
+            info["network"] = "verified"
         else:
             info["db"] = "failed_init"
-            info["db_error"] = os.environ.get("FIREBASE_INIT_ERROR", "Unknown init error")
+            info["error"] = os.environ.get("FIREBASE_INIT_ERROR", "Unknown init error")
     except Exception as e:
         info["db"] = "crash"
         info["error"] = str(e)
+        print(f"Health Check CRASH: {e}")
     return info
 
 # 3. IMPORT DATA BRIDGE
@@ -56,6 +55,7 @@ def health():
 async def handle_import(request: Request):
     try:
         data = await request.json()
+        print(f"Importing {len(data)} teachers...")
         from backend.database_firestore import get_db
         db = get_db()
         if not db:
@@ -78,8 +78,10 @@ async def handle_import(request: Request):
                 for sch in s["schedules"]:
                     staff_ref.collection("schedules").document(f"{sch['day_of_week']}_{sch['period']}").set(sch)
             count += 1
+        print(f"Import SUCCESS: {count} teachers.")
         return {"imported": count}
     except Exception as e:
+        print(f"Import CRASH: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # 4. CORE API ROUTES
