@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import sys
 import os
@@ -18,20 +19,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. ROOT & HEALTH (Mandatory for Render Monitor)
-@app.api_route("/", methods=["GET", "HEAD"])
-def root():
-    return {
-        "status": "online", 
-        "version": "5.4.0",
-        "message": "RotaAI Backend is Live and Fully Audited"
-    }
+# 1. SERVE FRONTEND (If exists)
+frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+if os.path.exists(frontend_path):
+    # Mount assets folder
+    assets_path = os.path.join(frontend_path, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+    
+    # Simple root response for HEAD monitor, but GET returns index.html
+    @app.api_route("/", methods=["GET", "HEAD"])
+    async def serve_frontend(request: Request):
+        if request.method == "HEAD":
+            return {"status": "online"}
+        index_file = os.path.join(frontend_path, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"status": "online", "msg": "index.html not found"}
 
+# 2. HEALTH & STATUS
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "5.4.0", "engine": "production"}
+    return {"status": "ok", "version": "5.5.0", "engine": "production"}
 
-# 2. STAFF ENDPOINTS
+# 3. STAFF ENDPOINTS
 @app.get("/api/staff")
 def get_staff():
     try:
@@ -50,7 +61,7 @@ def get_staff_schedule(staff_name: str, day: str = "Monday"):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 3. ABSENCE & ROTA
+# 4. ABSENCE & ROTA
 @app.get("/api/daily-rota")
 def get_daily_rota(date: str):
     from backend.database_firestore import FirestoreDB
@@ -69,7 +80,7 @@ def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
     aid = FirestoreDB.add_absence(staff["id"], staff["name"], target_date, start_period, end_period)
     return {"id": aid, "status": "created"}
 
-# 4. COVER SYSTEM
+# 5. COVER SYSTEM
 @app.get("/api/suggest-cover/{absence_id}")
 async def suggest_cover(absence_id: str, day: str = "Monday"):
     try:
@@ -118,17 +129,15 @@ def unassign_cover(absence_id: str, period: int):
     if success: return {"status": "unassigned"}
     raise HTTPException(status_code=500, detail="Unassignment failed")
 
-# 5. REPORTING & AI
+# 6. REPORTING & AI
 @app.get("/api/generate-report")
 def generate_report(query: str):
     try:
         from backend.database_firestore import FirestoreDB
         from backend.ai_agent import RotaAI
-        # Get context (absences + covers)
         absences = FirestoreDB.get_absences()
-        # Transform for AI context...
         context = "Recent Absences and Covers:\n"
-        for a in absences[-20:]: # Last 20 for brevity/RAM
+        for a in absences[-20:]:
             context += f"- {a['date']}: {a['staff_name']} (Periods {a['start_period']}-{a['end_period']})\n"
             for c in a.get("covers", []):
                 context += f"  - Period {c['period']} covered by {c['staff_name']}\n"
@@ -139,7 +148,7 @@ def generate_report(query: str):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 6. UTILITIES
+# 7. UTILITIES
 @app.get("/api/availability")
 def check_availability(periods: str, day: str = "Monday", date: str = None):
     from backend.database_firestore import FirestoreDB
