@@ -3,7 +3,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-# Ultra-simple app to prevent startup crashes
 app = FastAPI(title="RotaAI Render API")
 
 app.add_middleware(
@@ -14,12 +13,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. ROOT STATUS (Supports GET and HEAD for Render's monitor)
+# Global DB Handle to prevent re-initializing (saves memory/time)
+_cached_db = None
+
+# 1. ULTRA-FAST HEALTH (No DB allowed here)
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    return {"status": "online", "version": "4.8.2", "msg": "Stayin' Alive"}
+    return {"status": "online", "version": "4.8.3", "engine": "stable"}
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "version": "4.8.3"}
 
 def get_db_verified():
+    global _cached_db
+    if _cached_db:
+        return _cached_db
+        
+    print("[DB] Initializing Firestore Client...")
     from google.cloud import firestore
     from google.oauth2 import service_account
     
@@ -28,12 +39,12 @@ def get_db_verified():
     project_id = os.getenv("FIREBASE_PROJECT_ID")
     
     if not (pk and email and project_id):
+        print("[DB] Missing Environment Variables")
         return None
         
-    # DEEP SCRUBBER for those line breaks
-    # Join with \n and filter out any totally empty segments
+    # Deep scrub the PK
     clean_pk = pk.strip().replace("\\n", "\n")
-    lines = [line.strip() for line in clean_pk.split("\n") if line.strip()]
+    lines = [l.strip() for l in clean_pk.split("\n") if l.strip()]
     final_pk = "\n".join(lines)
     
     creds = service_account.Credentials.from_service_account_info({
@@ -43,40 +54,34 @@ def get_db_verified():
         "token_uri": "https://oauth2.googleapis.com/token",
         "type": "service_account"
     })
-    return firestore.Client(credentials=creds, project=project_id)
+    _cached_db = firestore.Client(credentials=creds, project=project_id)
+    print("[DB] Connection Established.")
+    return _cached_db
 
-@app.get("/api/health")
-def health():
-    info = {"status": "online", "version": "4.8.2"}
+# 2. SEPARATE DB TEST (Run this manually in browser)
+@app.get("/api/test-db")
+def test_db():
     try:
         db = get_db_verified()
-        if db:
-            info["db"] = "connected"
-            # Fast check
-            db.collection("staff").limit(1).get(timeout=5)
-            info["verified"] = True
-        else:
-            info["db"] = "env_missing"
+        if not db: return {"error": "Initialization failed"}
+        # Fast write test
+        db.collection("system").document("ping").set({"last_ping": firestore.SERVER_TIMESTAMP})
+        return {"db": "connected", "write_test": "passed"}
     except Exception as e:
-        info["db_error"] = str(e)
-    return info
+        return {"db": "failed", "error": str(e)}
 
 @app.post("/api/import-staff")
 async def handle_import(request: Request):
     try:
         data = await request.json()
         db = get_db_verified()
-        if not db:
-            return JSONResponse(status_code=500, content={"error": "DB Init Fail"})
+        if not db: return JSONResponse(status_code=500, content={"error": "DB Fail"})
         
         batch = db.batch()
         for i, s in enumerate(data):
+            # Upsert logic
             staff_ref = db.collection("staff").document(str(s["id"]))
-            batch.set(staff_ref, {
-                "name": s["name"],
-                "role": s.get("role", "Teacher"),
-                "is_active": True
-            })
+            batch.set(staff_ref, {"name": s["name"], "role": s.get("role", "Teacher")})
             if i % 10 == 0 and i > 0:
                 batch.commit()
                 batch = db.batch()
