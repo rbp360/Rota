@@ -1,10 +1,13 @@
-from http.server import BaseHTTPRequestHandler
-import json
+from fastapi import FastAPI
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({"status": "raw_python_v194"}).encode())
-        return
+app = FastAPI()
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok_v196", "msg": "It is alive!"}
+
+@app.all("/api/import-staff")
+async def imp():
+    return {"status": "ready"}
+
+app = app
