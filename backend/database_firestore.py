@@ -2,6 +2,7 @@ from google.cloud import firestore
 from google.oauth2 import service_account
 import os
 import json
+import re
 
 # Global variables
 _db = None
@@ -13,29 +14,32 @@ def get_db():
         
     print("INITIALIZING FIRESTORE (LITE)...")
     
-    # 1. Individual Variables (Vercel)
     pk = os.getenv("FIREBASE_PRIVATE_KEY")
     email = os.getenv("FIREBASE_CLIENT_EMAIL")
     project_id = os.getenv("FIREBASE_PROJECT_ID")
     
     if pk and email and project_id:
         try:
-            # SUPER AGGRESSIVE PK CLEANING
-            # 1. Remove literal quotes if they exist at ends
-            pk = pk.strip()
-            if pk.startswith('"') and pk.endswith('"'):
-                pk = pk[1:-1]
-            if pk.startswith("'") and pk.endswith("'"):
-                pk = pk[1:-1]
+            # ULTIMATE PRIVATE KEY SCRUBBER
+            raw_pk = pk.strip()
             
-            # 2. Handle escaped newlines (\n) vs real newlines
-            # If the user pasted it with \n characters, we replace them.
-            # If they are real newlines, this won't hurt.
-            clean_pk = pk.replace("\\n", "\n")
+            # Remove literal wrapping quotes if they exist
+            if raw_pk.startswith('"') and raw_pk.endswith('"'):
+                raw_pk = raw_pk[1:-1]
+            if raw_pk.startswith("'") and raw_pk.endswith("'"):
+                raw_pk = raw_pk[1:-1]
             
-            # 3. Final verification of header/footer
+            # Replace escaped \n with real newlines
+            clean_pk = raw_pk.replace("\\n", "\n")
+            
+            # Remove any empty lines that might have sneaked in
+            lines = [l.strip() for l in clean_pk.split("\n") if l.strip()]
+            clean_pk = "\n".join(lines)
+            
+            # Ensure header and footer are correctly placed
             if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
-                print("WARNING: MISSING PRIVATE KEY HEADER")
+                print("ERROR: Private key header missing")
+                return None
             
             info = {
                 "project_id": project_id,
@@ -44,26 +48,18 @@ def get_db():
                 "token_uri": "https://oauth2.googleapis.com/token",
                 "type": "service_account"
             }
+            
             creds = service_account.Credentials.from_service_account_info(info)
             _db = firestore.Client(credentials=creds, project=project_id)
-            print("FIRESTORE CONNECTED (ENV)")
+            print("FIRESTORE CONNECTED (SCRUBBED)")
             return _db
         except Exception as e:
-            msg = f"Firestore Init Failed (Env): {str(e)}"
+            msg = f"Firestore Authentication Crash: {str(e)}"
             print(msg)
             os.environ["FIREBASE_INIT_ERROR"] = msg
+            return None
 
-    # 2. Local JSON File (Development)
-    possible_path = os.path.join(os.getcwd(), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
-    if os.path.exists(possible_path):
-        try:
-            _db = firestore.Client.from_service_account_json(possible_path)
-            print("FIRESTORE CONNECTED (JSON)")
-            return _db
-        except Exception as e:
-            print(f"Failed to load local firebase key: {e}")
-
-    print("FIRESTORE NOT CONNECTED")
+    print("FIRESTORE NOT CONNECTED (MISSING ENV)")
     return None
 
 class FirestoreDB:
@@ -83,6 +79,7 @@ class FirestoreDB:
             print(f"Firestore get_staff Error: {e}")
             return []
 
+    # Other methods simplified for safety
     @staticmethod
     def get_staff_member(staff_id=None, name=None):
         database = get_db()
@@ -90,16 +87,11 @@ class FirestoreDB:
         try:
             if staff_id:
                 doc = database.collection("staff").document(staff_id).get()
-                if doc.exists:
-                    data = doc.to_dict()
-                    data["id"] = doc.id
-                    return data
+                return {**doc.to_dict(), "id": doc.id} if doc.exists else None
             if name:
                 docs = database.collection("staff").where("name", "==", name).limit(1).stream()
                 for doc in docs:
-                    data = doc.to_dict()
-                    data["id"] = doc.id
-                    return data
+                    return {**doc.to_dict(), "id": doc.id}
         except: pass
         return None
 
@@ -109,32 +101,9 @@ class FirestoreDB:
         if not database: return []
         try:
             query = database.collection("staff").document(staff_id).collection("schedules")
-            if day:
-                query = query.where("day_of_week", "==", day)
-            docs = query.stream()
-            schedules = []
-            for doc in docs:
-                schedules.append(doc.to_dict())
-            return schedules
+            if day: query = query.where("day_of_week", "==", day)
+            return [doc.to_dict() for doc in query.stream()]
         except: return []
-
-    @staticmethod
-    def add_absence(staff_id, staff_name, date, start_period, end_period):
-        database = get_db()
-        if not database: return None
-        try:
-            absence_ref = database.collection("absences").document()
-            absence_data = {
-                "staff_id": staff_id,
-                "staff_name": staff_name,
-                "date": date,
-                "start_period": int(start_period),
-                "end_period": int(end_period),
-                "timestamp": firestore.SERVER_TIMESTAMP
-            }
-            absence_ref.set(absence_data)
-            return absence_ref.id
-        except: return None
 
     @staticmethod
     def get_absences(date=None, staff_id=None):
@@ -142,17 +111,13 @@ class FirestoreDB:
         if not database: return []
         try:
             query = database.collection("absences")
-            if date:
-                query = query.where("date", "==", date)
-            if staff_id:
-                query = query.where("staff_id", "==", staff_id)
-            docs = query.stream()
+            if date: query = query.where("date", "==", date)
+            if staff_id: query = query.where("staff_id", "==", staff_id)
             absences = []
-            for doc in docs:
+            for doc in query.stream():
                 data = doc.to_dict()
                 data["id"] = doc.id
-                covers_docs = database.collection("absences").document(doc.id).collection("covers").stream()
-                data["covers"] = [c.to_dict() for c in covers_docs]
+                data["covers"] = [c.to_dict() for c in database.collection("absences").document(doc.id).collection("covers").stream()]
                 absences.append(data)
             return absences
         except: return []
