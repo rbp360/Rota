@@ -26,13 +26,15 @@ async def root():
 # 2. HEALTH CHECK (Fast)
 @app.get("/api/health")
 async def health():
-    info = {"status": "online", "version": "3.0.3", "platform": "Render"}
+    info = {"status": "online", "version": "3.0.4", "platform": "Render"}
     try:
         from backend.database_firestore import get_db, FirestoreDB
         db = get_db()
         info["db"] = "connected" if db else "failed"
         if db:
             info["staff_count"] = len(FirestoreDB.get_staff())
+        else:
+            info["db_error"] = os.environ.get("FIREBASE_INIT_ERROR", "Unknown error")
     except Exception as e:
         info["db"] = f"error: {str(e)}"
     return info
@@ -45,7 +47,8 @@ async def handle_import(request: Request):
         from backend.database_firestore import get_db
         db = get_db()
         if not db:
-            return JSONResponse(status_code=500, content={"error": "Database not connected"})
+            error_msg = os.environ.get("FIREBASE_INIT_ERROR", "Database connection failed")
+            return JSONResponse(status_code=500, content={"error": error_msg})
         
         count = 0
         for s in data:
@@ -72,9 +75,6 @@ async def handle_import(request: Request):
         )
 
 # 4. LOAD FULL API ENDPOINTS
-# We import these at the bottom to ensure they can access 'app' if needed,
-# or we can manually register them. For Render, we'll keep them in this file for safety.
-
 from backend.database_firestore import FirestoreDB
 from dateutil import parser
 from fastapi import HTTPException
@@ -108,11 +108,9 @@ async def suggest_cover(absence_id: str, day: str = "Monday"):
         absent_staff_id = absence["staff_id"]
         all_staff = FirestoreDB.get_staff()
         
-        # Suggestion logic relies on AI
         from backend.ai_agent import RotaAI
         ai = RotaAI()
         
-        # Build profiles for AI
         available_profiles = []
         for s in all_staff:
             if s["id"] == absent_staff_id: continue
@@ -125,7 +123,7 @@ async def suggest_cover(absence_id: str, day: str = "Monday"):
 
         ai_response = ai.suggest_cover(
             absent_staff=absence["staff_name"], day=day,
-            periods=[absence["start_period"]], # Simplified for now
+            periods=[absence["start_period"]],
             available_staff_profiles=available_profiles
         )
         return {"suggestions": ai_response}
