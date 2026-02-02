@@ -4,32 +4,48 @@ import sys
 import os
 import traceback
 
+# 1. ROOT PATH SETUP
+# Vercel's var/task is our root
+root_dir = "/var/task"
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+# Also try the local path for dev
+local_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if local_root not in sys.path:
+    sys.path.insert(0, local_root)
+
 app = FastAPI()
 
-# 1. LOCAL HEALTH CHECK
+# 2. EMERGENCY HEALTH CHECK
 @app.get("/api/health")
 async def health_check():
-    vendor_path = "/var/task/_vendor"
-    vendor_contents = []
-    if os.path.exists(vendor_path):
-        vendor_contents = os.listdir(vendor_path)
-    
-    return {
-        "status": "nested_mode",
-        "version": "1.8.6",
-        "info": "Checking for backend folder...",
-        "backend_exists": os.path.exists(os.path.join(os.path.dirname(__file__), "backend")),
-        "vendor_path": vendor_path,
-        "vendor_contents": vendor_contents[:20],  # show first 20
-        "sys_path": sys.path
+    info = {
+        "status": "online",
+        "version": "1.9.0",
+        "cwd": os.getcwd(),
+        "sys_path": sys.path[:5]
     }
+    try:
+        from backend.database_firestore import get_db, FirestoreDB
+        db = get_db()
+        if db:
+            info["db"] = "connected"
+            info["staff_count"] = len(FirestoreDB.get_staff())
+        else:
+            info["db"] = "failed_init"
+            info["db_error"] = os.environ.get("FIREBASE_INIT_ERROR")
+    except Exception as e:
+        info["db"] = f"error: {str(e)}"
+        info["trace"] = traceback.format_exc()
+    
+    return info
 
-# 2. NESTED IMPORT
+# 3. BRIDGE TO REAL BACKEND
 @app.post("/api/import-staff")
 async def handle_import(request: Request):
     try:
-        # Note: In Vercel, if we put 'backend' inside 'api', it's available as a local import
-        from .backend.main_firestore import import_staff_bridge
+        from backend.main_firestore import import_staff_bridge
         return await import_staff_bridge(request)
     except Exception as e:
         return JSONResponse(
@@ -37,5 +53,5 @@ async def handle_import(request: Request):
             content={"error": str(e), "trace": traceback.format_exc()}
         )
 
-# Standard app exposure
+# EXPORT
 app = app

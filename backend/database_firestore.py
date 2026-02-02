@@ -1,50 +1,64 @@
-from google.cloud import firestore
+import firebase_admin
+from firebase_admin import credentials, firestore
 import os
 import json
 
-# Global variable for the firestore client
+# Global variables
 _db = None
 
 def get_db():
     global _db
     if _db is not None:
         return _db
-    
-    # 1. Individual Variables (Vercel)
-    pk = os.getenv("FIREBASE_PRIVATE_KEY")
-    email = os.getenv("FIREBASE_CLIENT_EMAIL")
-    project_id = os.getenv("FIREBASE_PROJECT_ID")
-    
-    if pk and email and project_id:
-        try:
-            # Clean up private key
-            clean_pk = pk.replace("\\n", "\n").strip()
-            if clean_pk.startswith('"') and clean_pk.endswith('"'):
-                clean_pk = clean_pk[1:-1]
-            
-            # Use google-cloud-firestore compatible credentials
-            from google.oauth2 import service_account
-            info = {
-                "project_id": project_id,
-                "private_key": clean_pk,
-                "client_email": email,
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-            creds = service_account.Credentials.from_service_account_info(info)
-            _db = firestore.Client(credentials=creds, project=project_id)
-            return _db
-        except Exception as e:
-            os.environ["FIREBASE_INIT_ERROR"] = f"v1.8.0 | Lighter Init Failed: {str(e)}"
+        
+    if not firebase_admin._apps:
+        # 1. Individual Variables (Vercel)
+        pk = os.getenv("FIREBASE_PRIVATE_KEY")
+        email = os.getenv("FIREBASE_CLIENT_EMAIL")
+        project_id = os.getenv("FIREBASE_PROJECT_ID")
+        
+        if pk and email and project_id:
+            try:
+                # Clean up private key
+                clean_pk = pk.replace("\\n", "\n").strip()
+                if clean_pk.startswith('"') and clean_pk.endswith('"'):
+                    clean_pk = clean_pk[1:-1]
+                
+                info = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key": clean_pk,
+                    "client_email": email,
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+                cred = credentials.Certificate(info)
+                firebase_admin.initialize_app(cred)
+            except Exception as e:
+                os.environ["FIREBASE_INIT_ERROR"] = f"v1.9.0 | Init Failed: {str(e)}"
 
-    # 2. Local JSON File (Development)
-    possible_path = os.path.join(os.getcwd(), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
-    if os.path.exists(possible_path):
-        try:
-            _db = firestore.Client.from_service_account_json(possible_path)
+        # 2. Local JSON File (Development)
+        if not firebase_admin._apps:
+            possible_path = os.path.join(os.getcwd(), "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json")
+            if os.path.exists(possible_path):
+                try:
+                    cred = credentials.Certificate(possible_path)
+                    firebase_admin.initialize_app(cred)
+                except Exception as e:
+                    print(f"Failed to load local firebase key: {e}")
+
+        # 3. Last resort: Default credentials
+        if not firebase_admin._apps:
+            try:
+                firebase_admin.initialize_app()
+            except:
+                pass
+    
+    try:
+        if firebase_admin._apps:
+            _db = firestore.client()
             return _db
-        except Exception as e:
-            print(f"Failed to load local firebase key: {e}")
-            
+    except:
+        pass
     return None
 
 class FirestoreDB:
