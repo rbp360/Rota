@@ -15,12 +15,16 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "message": "Render is responding!", "version": "4.0.2"}
+    return {"status": "online", "message": "Render is responding!", "version": "4.0.3"}
 
-@app.get("/health")
+@app.get("/api/health")
 def read_health():
-    return {"status": "ok", "msg": "Sync tests beginning"}
+    return {"status": "ok", "msg": "API Path Restored"}
 
-@app.post("/import-staff")
+@app.post("/api/import-staff")
 def importer():
-    return {"msg": "Importer hit"}
+    return {"msg": "API Importer hit"}
+
+@app.all("/{path:path}")
+def catch_all(path: str):
+    return {"path": path, "msg": "Root Catch-all reached", "hint": "Try prefixing with /api"}
