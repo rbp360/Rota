@@ -1,13 +1,14 @@
 {
     "functions": {
-        "api/server.py": {
-            "maxDuration": 30
+        "api/index.py": {
+            "maxDuration": 60,
+            "memory": 1024
         }
     },
     "rewrites": [
         {
             "source": "/api/(.*)",
-            "destination": "/api/server.py"
+            "destination": "/api/index.py"
         }
     ]
 }
