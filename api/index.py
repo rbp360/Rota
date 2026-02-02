@@ -4,10 +4,7 @@ app = FastAPI()
 
 @app.get("/api/health")
 async def health():
-    return {"status": "baseline_test", "version": "1.9.2"}
+    return {"status": "baseline_v193", "msg": "Zero Config Test"}
 
-@app.all("/api/{path:path}")
-async def catch_all(path: str):
-    return {"message": f"Path {path} works in baseline mode."}
-
+# For Vercel
 app = app
