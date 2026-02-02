@@ -9,6 +9,6 @@ requests
 python-multipart
 icalendar
 recurring-ical-events
-sqlalchemy
+sqlalchemy>=2.0.0
 google-generativeai
-pip
+setuptools
