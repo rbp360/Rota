@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 # 1. CONFIGURE YOUR URL HERE
 # Change this to your actual Vercel app URL (e.g., https://my-app.vercel.app)
-TARGET_URL = "https://rotaai-smoky.vercel.app" 
+TARGET_URL = "https://rota-47dp.onrender.com" 
 
 def migrate_via_bridge():
     print(f"Connecting to local SQLite...")
