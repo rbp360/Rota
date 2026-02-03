@@ -23,19 +23,26 @@ def get_db():
         return None
 
     try:
-        print("FIRESTORE DEBUG 1: Scrubbing private key...")
+        print("FIRESTORE DEBUG 1: Scrubbing and verifying Private Key...")
         raw_pk = pk.strip()
-        if raw_pk.startswith('"') and raw_pk.endswith('"'):
-            raw_pk = raw_pk[1:-1]
+        
+        # Comprehensive quote and newline scrubbing
+        if raw_pk.startswith('"') and raw_pk.endswith('"'): raw_pk = raw_pk[1:-1]
+        if raw_pk.startswith("'") and raw_pk.endswith("'"): raw_pk = raw_pk[1:-1]
         
         clean_pk = raw_pk.replace("\\n", "\n")
         
-        # Final sanitization
+        # Ensure header/footer are correctly spaced
+        clean_pk = clean_pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        clean_pk = clean_pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+        # Kill any double newlines created above
+        clean_pk = clean_pk.replace("\n\n", "\n")
+        
         if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
-            print("FIRESTORE ERROR: Private key header missing after scrubbing")
+            print("FIRESTORE ERROR: PEM Header missing. Check your Render ENV var.")
             return None
             
-        print("FIRESTORE DEBUG 2: Creating credentials object...")
+        print(f"FIRESTORE DEBUG 2: Credentials ready for Email: {email}")
         info = {
             "project_id": project_id,
             "private_key": clean_pk,
