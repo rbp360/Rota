@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.15)...")
+    print("FIRESTORE: Initializing (v5.5.16)...")
     
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
@@ -23,24 +23,20 @@ def get_db():
         return None
 
     try:
-        # PURE BASE64 EXTRACTION v3
-        meat = pk
+        # STRATEGY: LONGEST PART
+        # PEM files are Header + Meat + Footer. The meat is always the longest part.
+        parts = pk.split("-----")
+        meat = max(parts, key=len)
         
-        # 1. First, explicitly remove the literal sequences of \n and \\n 
-        # so they don't get turned into the letter 'n' by the regex
-        meat = meat.replace("\\n", "").replace("\n", "")
+        # Clean the meat of all noise
+        meat = meat.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "")
+        meat = meat.replace('"', '').replace("'", "").replace("-", "").strip()
         
-        # 2. Isolate base64 between headers if they exist
-        if "PRIVATE KEY" in meat:
-            try:
-                meat = meat.split("PRIVATE KEY")[-1].split("-----")[0]
-            except: pass
+        if len(meat) < 100:
+            print(f"FIRESTORE ERROR: Key meat too short ({len(meat)} chars).")
+            return None
             
-        # 3. Now strip all remaining non-base64 characters safely
-        import re
-        meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
-        
-        # 4. Rebuild perfect PEM
+        # REBUILD PERFECT PEM
         clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
 
         info = {
@@ -55,7 +51,7 @@ def get_db():
         from google.cloud.firestore_v1.services.firestore.transports.rest import FirestoreRestTransport
         _db = firestore.Client(credentials=creds, project=project_id, transport=FirestoreRestTransport)
         
-        print(f"FIRESTORE SUCCESS: Connected (Length: {len(meat)})")
+        print(f"FIRESTORE SUCCESS: Connected (Meat: {len(meat)} chars)")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
