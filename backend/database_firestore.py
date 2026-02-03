@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.10)...")
+    print("FIRESTORE: Initializing (v5.5.11)...")
     
     # Aggressive stripping of env vars
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
@@ -24,18 +24,18 @@ def get_db():
         return None
 
     try:
-        # IRONCLAD PEM FORMATTER
-        # 1. Remove all quotes
-        raw = pk.replace('"', '').replace("'", "")
+        # IRONCLAD PEM FORMATTER v2
+        # Remove all whitespace and quotes
+        raw = pk.replace('"', '').replace("'", "").replace("\\n", "").replace("\n", "").replace(" ", "").strip()
         
-        # 2. Extract the base64 "meat" by removing known headers/footers
-        meat = raw.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-        
-        # 3. Clean up all escaped and actual newlines/spaces
-        meat = meat.replace("\\n", "").replace("\n", "").replace(" ", "").strip()
-        
-        # 4. Rebuild the PEM perfectly
-        # Google needs exactly: Header + \n + Body + \n + Footer
+        # Extract the base64 part
+        # Most keys start with MII
+        if "PRIVATEKEY-----" in raw:
+            meat = raw.split("PRIVATEKEY-----")[-1].split("-----")[0].strip()
+        else:
+            meat = raw
+            
+        # Rebuild perfect PEM
         clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
 
         info = {
@@ -47,8 +47,12 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        _db = firestore.Client(credentials=creds, project=project_id)
-        print("FIRESTORE SUCCESS: Client Initialized")
+        
+        # Use REST transport to avoid gRPC hangs on Render
+        from google.cloud.firestore_v1.services.firestore.transports.rest import FirestoreRestTransport
+        _db = firestore.Client(credentials=creds, project=project_id, transport=FirestoreRestTransport)
+        
+        print("FIRESTORE SUCCESS: Connected via REST")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
