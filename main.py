@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.21",
-        "msg": "Server is listening (v5.5.21)"
+        "version": "5.5.22",
+        "msg": "Server is listening (v5.5.22)"
     }
 
 @app.get("/api/quick-health")

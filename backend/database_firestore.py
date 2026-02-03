@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.21)...")
+    print("FIRESTORE: Initializing (v5.5.22)...")
     
     # Lazy imports to save memory on startup
     from google.cloud import firestore
@@ -27,20 +27,18 @@ def get_db():
         return None
 
     try:
-        # STRATEGY: LONGEST PART
+        # 1. Isolate the base64 content
         parts = pk.split("-----")
         meat = max(parts, key=len)
         
-        # Clean the meat of all noise
-        meat = meat.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "")
-        meat = meat.replace('"', '').replace("'", "").replace("-", "").strip()
+        # 2. IRONCLAD SCRUBBER: Remove everything except valid Base64 characters
+        # This removes \n, literal \n, spaces, quotes, etc.
+        meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
         
-        if len(meat) < 100:
-            print(f"FIRESTORE ERROR: Key meat too short ({len(meat)} chars).")
-            return None
-            
-        # REBUILD PERFECT PEM
-        clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
+        # 3. REBUILD PERFECT PEM WITH 64-CHAR WRAP
+        # Some libraries REQUIRE the 64-char line breaks for valid JWT signing
+        lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
+        clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
         info = {
             "project_id": project_id,
@@ -51,10 +49,10 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        # Using default gRPC client but with higher timeout expectations
+        # Using default client
         _db = firestore.Client(credentials=creds, project=project_id)
         
-        print(f"FIRESTORE SUCCESS: Connected (Meat: {len(meat)} chars)")
+        print(f"FIRESTORE SUCCESS: Connected (Cleaned Meat: {len(meat)} chars)")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
