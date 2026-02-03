@@ -12,7 +12,11 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.17)...")
+    print("FIRESTORE: Initializing (v5.5.21)...")
+    
+    # Lazy imports to save memory on startup
+    from google.cloud import firestore
+    from google.oauth2 import service_account
     
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
@@ -47,7 +51,7 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        # Removed transport=FirestoreRestTransport for Render compatibility
+        # Using default gRPC client but with higher timeout expectations
         _db = firestore.Client(credentials=creds, project=project_id)
         
         print(f"FIRESTORE SUCCESS: Connected (Meat: {len(meat)} chars)")

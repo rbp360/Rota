@@ -33,29 +33,13 @@ async def health(request: Request):
     if request.method == "HEAD":
         return JSONResponse(status_code=200, content={"status": "ok"})
     
-    db_status = "Scanning..."
-    staff_count = -1
-    try:
-        from backend.database_firestore import get_db, FirestoreDB
-        import concurrent.futures
-        
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(FirestoreDB.get_staff)
-            try:
-                data = future.result(timeout=10)
-                db_status = "Connected"
-                staff_count = len(data)
-            except Exception as e:
-                db_status = f"Timeout/Error: {str(e)}"
-    except Exception as e:
-        db_status = f"Critical: {str(e)}"
-
+    # ULTRALIGHT HEALTH CHECK - v5.5.21
+    # We do NOT touch the DB here to avoid 502 timeouts during boot or sync
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.20",
-        "database": db_status,
-        "staff_found": staff_count
+        "version": "5.5.21",
+        "msg": "Server is listening (v5.5.21)"
     }
 
 @app.get("/api/quick-health")
