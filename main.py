@@ -52,7 +52,8 @@ async def health(request: Request):
 
     return {
         "status": "ok",
-        "version": "5.5.6",
+        "role": "production-api",
+        "version": "5.5.7",
         "database": db_status,
         "staff_found": staff_count
     }
@@ -68,11 +69,15 @@ def get_staff():
     try:
         from backend.database_firestore import FirestoreDB
         data = FirestoreDB.get_staff()
-        print(f"API: Found {len(data)} staff")
+        print(f"API: Found {len(data)} staff members")
         return data
     except Exception as e:
         print(f"API ERROR: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/ping")
+def ping():
+    return {"msg": "pong", "timestamp": str(os.urandom(4).hex())}
 
 @app.get("/api/staff-schedule/{staff_name}")
 def get_staff_schedule(staff_name: str, day: str = "Monday"):
@@ -198,28 +203,30 @@ assets_path = os.path.join(frontend_path, "assets")
 if os.path.exists(assets_path):
     app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root(request: Request):
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        if request.method == "HEAD":
+            return JSONResponse(status_code=200, content={})
+        return FileResponse(index_file)
+    return JSONResponse(status_code=404, content={"error": "Frontend missing"})
+
 @app.get("/{full_path:path}")
-async def serve_frontend(request: Request, full_path: str = ""):
-    # Skip if it's an API route that somehow got here
+async def catch_all(request: Request, full_path: str):
+    # Ignore API
     if full_path.startswith("api/"):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    
+    # Ignore common image/favicon requests that might be missing
+    if any(full_path.endswith(ext) for ext in [".ico", ".png", ".svg", ".jpg"]):
+        return JSONResponse(status_code=404, content={"detail": "Image missing"})
 
     index_file = os.path.join(frontend_path, "index.html")
     if os.path.exists(index_file):
-        print(f"Serving index.html for path: /{full_path}")
         return FileResponse(index_file)
     
-    print(f"FRONTEND MISSING: {index_file}")
-    return JSONResponse(
-        status_code=404,
-        content={
-            "error": "Frontend build not found",
-            "detail": "index.html not found in frontend/dist. Check if build.sh completed successfully.",
-            "path_checked": frontend_path,
-            "full_path": full_path
-        }
-    )
+    return JSONResponse(status_code=404, content={"error": "Frontend missing"})
 
 if __name__ == "__main__":
     import uvicorn
