@@ -38,7 +38,7 @@ const App = () => {
 
   const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? "http://127.0.0.1:8000/api"
-    : "https://rota-47dp.onrender.com/api";
+    : "/api";
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -88,9 +88,19 @@ const App = () => {
   useEffect(() => {
     const fetchStaff = async () => {
       try {
+        console.log(`Fetching staff from: ${API_URL}/staff`);
         const res = await axios.get(`${API_URL}/staff`);
+        console.log("Raw staff data received:", res.data);
+
+        if (!Array.isArray(res.data)) {
+          console.error("Staff data is not an array:", res.data);
+          return;
+        }
+
         const ignore = ["TBC", "External", "Coach", "Room", "Music Room", "Hall", "Gym", "Pitch", "Court", "Pool", "Library", "PRE NURSERY", "PRE NUSERY", "Outside Prov.", "**", "gate", "locked", "at", "8.30", "Mr", "1", "Calire", "?", "Duty"];
-        const cleanList = res.data.map(s => s.name).filter(n => !ignore.some(i => n.toLowerCase().includes(i.toLowerCase())));
+        const cleanList = res.data.map(s => s.name).filter(n => n && !ignore.some(i => n.toLowerCase().includes(i.toLowerCase())));
+
+        console.log(`Filtered staff list count: ${cleanList.length}`);
         setStaffList(cleanList.sort());
       } catch (err) {
         console.error("Failed to fetch staff:", err);

@@ -30,15 +30,38 @@ async def log_requests(request: Request, call_next):
 # 2. HEALTH & STATUS
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "5.5.2", "engine": "production"}
+    db_status = "Not Initialized"
+    staff_count = -1
+    try:
+        from backend.database_firestore import get_db, FirestoreDB
+        db = get_db()
+        if db:
+            db_status = "Connected"
+            staff_count = len(FirestoreDB.get_staff())
+        else:
+            db_status = "Failed (Check Environment Variables)"
+    except Exception as e:
+        db_status = f"Error: {str(e)}"
+
+    return {
+        "status": "ok",
+        "version": "5.5.3",
+        "database": db_status,
+        "staff_found": staff_count,
+        "engine": "production"
+    }
 
 # 3. STAFF ENDPOINTS
 @app.get("/api/staff")
 def get_staff():
+    print("Fetching staff list...")
     try:
         from backend.database_firestore import FirestoreDB
-        return FirestoreDB.get_staff()
+        data = FirestoreDB.get_staff()
+        print(f"Total staff found in DB: {len(data)}")
+        return data
     except Exception as e:
+        print(f"STAFF FETCH ERROR: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/staff-schedule/{staff_name}")
