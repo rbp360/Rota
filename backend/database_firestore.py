@@ -12,8 +12,9 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.9)...")
+    print("FIRESTORE: Initializing (v5.5.10)...")
     
+    # Aggressive stripping of env vars
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
     project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
@@ -23,22 +24,19 @@ def get_db():
         return None
 
     try:
-        # Deep scrub
-        raw_pk = pk
-        if raw_pk.startswith('"') and raw_pk.endswith('"'): raw_pk = raw_pk[1:-1]
+        # IRONCLAD PEM FORMATTER
+        # 1. Remove all quotes
+        raw = pk.replace('"', '').replace("'", "")
         
-        # Handle cases where newlines might be double-escaped
-        clean_pk = raw_pk.replace("\\\\n", "\n").replace("\\n", "\n")
+        # 2. Extract the base64 "meat" by removing known headers/footers
+        meat = raw.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
         
-        if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
-            print("FIRESTORE ERROR: Invalid PEM Header.")
-            return None
-            
-        # Ensure proper newline separation for PEM
-        if not clean_pk.startswith("-----BEGIN PRIVATE KEY-----\n"):
-            clean_pk = clean_pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        if not clean_pk.endswith("\n-----END PRIVATE KEY-----"):
-            clean_pk = clean_pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+        # 3. Clean up all escaped and actual newlines/spaces
+        meat = meat.replace("\\n", "").replace("\n", "").replace(" ", "").strip()
+        
+        # 4. Rebuild the PEM perfectly
+        # Google needs exactly: Header + \n + Body + \n + Footer
+        clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
 
         info = {
             "project_id": project_id,
