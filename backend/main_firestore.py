@@ -65,10 +65,16 @@ async def import_staff_bridge(request: Request):
         return {"error": "Firestore not connected"}
     
     count = 0
+    # Use a Write Batch for each request to be much faster
+    batch = db.batch()
+    
     for s in data:
         try:
-            staff_ref = db.collection("staff").document(str(s["id"]))
-            staff_ref.set({
+            staff_id = str(s["id"])
+            staff_ref = db.collection("staff").document(staff_id)
+            
+            # 1. Update/Set staff info in batch
+            batch.set(staff_ref, {
                 "name": s["name"],
                 "role": s.get("role", "Teacher"),
                 "profile": s.get("profile"),
@@ -78,12 +84,25 @@ async def import_staff_bridge(request: Request):
                 "can_cover_periods": s.get("can_cover_periods", True),
                 "calendar_url": s.get("calendar_url")
             })
+
+            # 2. Add schedules to batch if present
             if "schedules" in s:
                 for sch in s["schedules"]:
-                    staff_ref.collection("schedules").document(f"{sch['day_of_week']}_{sch['period']}").set(sch)
+                    sched_id = f"{sch['day_of_week']}_{sch['period']}"
+                    sched_ref = staff_ref.collection("schedules").document(sched_id)
+                    batch.set(sched_ref, sch)
+            
             count += 1
-        except: pass
-    return {"imported": count}
+        except Exception as e:
+            print(f"Error preparing batch for {s.get('name')}: {e}")
+
+    # Commit all operations at once
+    try:
+        batch.commit()
+        return {"imported": count, "status": "success"}
+    except Exception as e:
+        print(f"BATH COMMIT FAILED: {e}")
+        return {"error": str(e), "imported": 0}
 
 @app.get("/api/staff")
 def get_staff():
