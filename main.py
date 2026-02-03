@@ -29,23 +29,28 @@ async def log_requests(request: Request, call_next):
 
 # 2. HEALTH & STATUS
 @app.get("/api/health")
-def health():
-    db_status = "Not Initialized"
+async def health():
+    db_status = "Scanning with Timeout..."
     staff_count = -1
     try:
         from backend.database_firestore import get_db, FirestoreDB
-        db = get_db()
-        if db:
-            db_status = "Connected"
-            staff_count = len(FirestoreDB.get_staff())
-        else:
-            db_status = "Failed (Check Environment Variables)"
+        import concurrent.futures
+        
+        # Emergency timeout wrapper
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(FirestoreDB.get_staff)
+            try:
+                data = future.result(timeout=5)
+                db_status = "Connected"
+                staff_count = len(data)
+            except concurrent.futures.TimeoutError:
+                db_status = "Timeout (DB is hanging)"
     except Exception as e:
         db_status = f"Error: {str(e)}"
 
     return {
         "status": "ok",
-        "version": "5.5.3",
+        "version": "5.5.5",
         "database": db_status,
         "staff_found": staff_count,
         "engine": "production"
@@ -54,14 +59,21 @@ def health():
 # 3. STAFF ENDPOINTS
 @app.get("/api/staff")
 def get_staff():
-    print("Fetching staff list...")
+    print("API: Fetching staff list (with safety timeout)...")
+    from backend.database_firestore import FirestoreDB
+    import concurrent.futures
+    
     try:
-        from backend.database_firestore import FirestoreDB
-        data = FirestoreDB.get_staff()
-        print(f"Total staff found in DB: {len(data)}")
-        return data
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(FirestoreDB.get_staff)
+            data = future.result(timeout=8) # 8 second hard limit
+            print(f"API: Success, found {len(data)}")
+            return data
+    except concurrent.futures.TimeoutError:
+        print("API ERROR: Database call timed out")
+        return JSONResponse(status_code=504, content={"error": "Database timeout - check Private Key format on Render"})
     except Exception as e:
-        print(f"STAFF FETCH ERROR: {str(e)}")
+        print(f"API ERROR: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/staff-schedule/{staff_name}")

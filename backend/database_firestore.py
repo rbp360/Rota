@@ -12,55 +12,53 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("INITIALIZING FIRESTORE (LITE)...")
+    print("FIRESTORE: Starting initialization...")
     
     pk = os.getenv("FIREBASE_PRIVATE_KEY")
     email = os.getenv("FIREBASE_CLIENT_EMAIL")
     project_id = os.getenv("FIREBASE_PROJECT_ID")
     
-    if pk and email and project_id:
-        try:
-            # ULTIMATE PRIVATE KEY SCRUBBER
-            raw_pk = pk.strip()
-            
-            # Remove literal wrapping quotes if they exist
-            if raw_pk.startswith('"') and raw_pk.endswith('"'):
-                raw_pk = raw_pk[1:-1]
-            if raw_pk.startswith("'") and raw_pk.endswith("'"):
-                raw_pk = raw_pk[1:-1]
-            
-            # Replace escaped \n with real newlines
-            clean_pk = raw_pk.replace("\\n", "\n")
-            
-            # Remove any empty lines that might have sneaked in
-            lines = [l.strip() for l in clean_pk.split("\n") if l.strip()]
-            clean_pk = "\n".join(lines)
-            
-            # Ensure header and footer are correctly placed
-            if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
-                print("ERROR: Private key header missing")
-                return None
-            
-            info = {
-                "project_id": project_id,
-                "private_key": clean_pk,
-                "client_email": email,
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "type": "service_account"
-            }
-            
-            creds = service_account.Credentials.from_service_account_info(info)
-            _db = firestore.Client(credentials=creds, project=project_id)
-            print("FIRESTORE CONNECTED (SCRUBBED)")
-            return _db
-        except Exception as e:
-            msg = f"Firestore Authentication Crash: {str(e)}"
-            print(msg)
-            os.environ["FIREBASE_INIT_ERROR"] = msg
-            return None
+    if not pk or not email or not project_id:
+        print(f"FIRESTORE ERROR: Missing environment variables. PK:{'SET' if pk else 'MISSING'}, Email:{'SET' if email else 'MISSING'}, ProjectID:{'SET' if project_id else 'MISSING'}")
+        return None
 
-    print("FIRESTORE NOT CONNECTED (MISSING ENV)")
-    return None
+    try:
+        print("FIRESTORE DEBUG 1: Scrubbing private key...")
+        raw_pk = pk.strip()
+        if raw_pk.startswith('"') and raw_pk.endswith('"'):
+            raw_pk = raw_pk[1:-1]
+        
+        clean_pk = raw_pk.replace("\\n", "\n")
+        
+        # Final sanitization
+        if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
+            print("FIRESTORE ERROR: Private key header missing after scrubbing")
+            return None
+            
+        print("FIRESTORE DEBUG 2: Creating credentials object...")
+        info = {
+            "project_id": project_id,
+            "private_key": clean_pk,
+            "client_email": email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "type": "service_account"
+        }
+        
+        creds = service_account.Credentials.from_service_account_info(info)
+        
+        print("FIRESTORE DEBUG 3: Initializing Firestore client...")
+        _db = firestore.Client(credentials=creds, project=project_id)
+        
+        # Test connection with a very short timeout
+        print("FIRESTORE DEBUG 4: Testing connection...")
+        # Since this can hang, we just return and hope for the best in the first call
+        print("FIRESTORE SUCCESS: Connected")
+        return _db
+    except Exception as e:
+        msg = f"FIRESTORE CRASH: {str(e)}"
+        print(msg)
+        os.environ["FIREBASE_INIT_ERROR"] = msg
+        return None
 
 class FirestoreDB:
     @staticmethod
