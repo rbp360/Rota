@@ -19,28 +19,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. SERVE FRONTEND (If exists)
-frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
-if os.path.exists(frontend_path):
-    # Mount assets folder
-    assets_path = os.path.join(frontend_path, "assets")
-    if os.path.exists(assets_path):
-        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
-    
-    # Simple root response for HEAD monitor, but GET returns index.html
-    @app.api_route("/", methods=["GET", "HEAD"])
-    async def serve_frontend(request: Request):
-        if request.method == "HEAD":
-            return {"status": "online"}
-        index_file = os.path.join(frontend_path, "index.html")
-        if os.path.exists(index_file):
-            return FileResponse(index_file)
-        return {"status": "online", "msg": "index.html not found"}
+# 1. MIDDLEWARE FOR LOGGING
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"Incoming request: {request.method} {request.url.path}")
+    response = await call_next(request)
+    print(f"Response status: {response.status_code}")
+    return response
 
 # 2. HEALTH & STATUS
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "5.5.0", "engine": "production"}
+    return {"status": "ok", "version": "5.5.2", "engine": "production"}
 
 # 3. STAFF ENDPOINTS
 @app.get("/api/staff")
@@ -167,3 +157,38 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
 async def handle_import(request: Request):
     from backend.main_firestore import import_staff_bridge
     return await import_staff_bridge(request)
+
+# 8. SERVE FRONTEND (Catch-all)
+frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+assets_path = os.path.join(frontend_path, "assets")
+
+if os.path.exists(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+@app.get("/")
+@app.get("/{full_path:path}")
+async def serve_frontend(request: Request, full_path: str = ""):
+    # Skip if it's an API route that somehow got here
+    if full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    index_file = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_file):
+        print(f"Serving index.html for path: /{full_path}")
+        return FileResponse(index_file)
+    
+    print(f"FRONTEND MISSING: {index_file}")
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Frontend build not found",
+            "detail": "index.html not found in frontend/dist. Check if build.sh completed successfully.",
+            "path_checked": frontend_path,
+            "full_path": full_path
+        }
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting RotaAI Local Server on http://127.0.0.1:8000")
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

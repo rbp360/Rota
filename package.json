@@ -1,0 +1,13 @@
+{
+    "name": "rota-root",
+    "version": "1.0.0",
+    "scripts": {
+        "frontend": "cd frontend && npm run dev",
+        "backend": "python main.py",
+        "dev": "npx concurrently \"npm run backend\" \"npm run frontend\"",
+        "install-all": "pip install -r requirements.txt && cd frontend && npm install"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
