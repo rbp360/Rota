@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.16)...")
+    print("FIRESTORE: Initializing (v5.5.17)...")
     
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
@@ -24,7 +24,6 @@ def get_db():
 
     try:
         # STRATEGY: LONGEST PART
-        # PEM files are Header + Meat + Footer. The meat is always the longest part.
         parts = pk.split("-----")
         meat = max(parts, key=len)
         
@@ -48,8 +47,8 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        from google.cloud.firestore_v1.services.firestore.transports.rest import FirestoreRestTransport
-        _db = firestore.Client(credentials=creds, project=project_id, transport=FirestoreRestTransport)
+        # Removed transport=FirestoreRestTransport for Render compatibility
+        _db = firestore.Client(credentials=creds, project=project_id)
         
         print(f"FIRESTORE SUCCESS: Connected (Meat: {len(meat)} chars)")
         return _db

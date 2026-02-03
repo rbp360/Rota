@@ -53,7 +53,7 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.16",
+        "version": "5.5.17",
         "database": db_status,
         "staff_found": staff_count
     }
