@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.11)...")
+    print("FIRESTORE: Initializing (v5.5.14)...")
     
     # Aggressive stripping of env vars
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
@@ -24,18 +24,19 @@ def get_db():
         return None
 
     try:
-        # IRONCLAD PEM FORMATTER v2
-        # Remove all whitespace and quotes
-        raw = pk.replace('"', '').replace("'", "").replace("\\n", "").replace("\n", "").replace(" ", "").strip()
-        
-        # Extract the base64 part
-        # Most keys start with MII
-        if "PRIVATEKEY-----" in raw:
-            meat = raw.split("PRIVATEKEY-----")[-1].split("-----")[0].strip()
-        else:
-            meat = raw
+        # REGEX BASE64 SCRUBBER
+        # 1. Isolate the base64 part
+        meat = pk
+        if "-----BEGIN" in meat:
+            try:
+                meat = meat.split("PRIVATE KEY-----")[-1].split("-----END")[0]
+            except: pass
             
-        # Rebuild perfect PEM
+        # 2. Extract only valid Base64 characters
+        import re
+        meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
+        
+        # 3. Rebuild perfect PEM
         clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
 
         info = {
