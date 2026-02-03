@@ -12,9 +12,8 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.14)...")
+    print("FIRESTORE: Initializing (v5.5.15)...")
     
-    # Aggressive stripping of env vars
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
     project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
@@ -24,19 +23,24 @@ def get_db():
         return None
 
     try:
-        # REGEX BASE64 SCRUBBER
-        # 1. Isolate the base64 part
+        # PURE BASE64 EXTRACTION v3
         meat = pk
-        if "-----BEGIN" in meat:
+        
+        # 1. First, explicitly remove the literal sequences of \n and \\n 
+        # so they don't get turned into the letter 'n' by the regex
+        meat = meat.replace("\\n", "").replace("\n", "")
+        
+        # 2. Isolate base64 between headers if they exist
+        if "PRIVATE KEY" in meat:
             try:
-                meat = meat.split("PRIVATE KEY-----")[-1].split("-----END")[0]
+                meat = meat.split("PRIVATE KEY")[-1].split("-----")[0]
             except: pass
             
-        # 2. Extract only valid Base64 characters
+        # 3. Now strip all remaining non-base64 characters safely
         import re
         meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
         
-        # 3. Rebuild perfect PEM
+        # 4. Rebuild perfect PEM
         clean_pk = f"-----BEGIN PRIVATE KEY-----\n{meat}\n-----END PRIVATE KEY-----\n"
 
         info = {
@@ -48,12 +52,10 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        
-        # Use REST transport to avoid gRPC hangs on Render
         from google.cloud.firestore_v1.services.firestore.transports.rest import FirestoreRestTransport
         _db = firestore.Client(credentials=creds, project=project_id, transport=FirestoreRestTransport)
         
-        print("FIRESTORE SUCCESS: Connected via REST")
+        print(f"FIRESTORE SUCCESS: Connected (Length: {len(meat)})")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
