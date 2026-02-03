@@ -53,7 +53,7 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.7",
+        "version": "5.5.9",
         "database": db_status,
         "staff_found": staff_count
     }
@@ -218,9 +218,9 @@ async def catch_all(request: Request, full_path: str):
     if full_path.startswith("api/"):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
     
-    # Ignore common image/favicon requests that might be missing
+    # Return silent 200 for common missing assets to keep console clean
     if any(full_path.endswith(ext) for ext in [".ico", ".png", ".svg", ".jpg"]):
-        return JSONResponse(status_code=404, content={"detail": "Image missing"})
+        return JSONResponse(status_code=200, content={"status": "missing_asset_silenced"})
 
     index_file = os.path.join(frontend_path, "index.html")
     if os.path.exists(index_file):

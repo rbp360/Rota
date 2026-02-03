@@ -12,37 +12,34 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Starting initialization...")
+    print("FIRESTORE: Initializing (v5.5.9)...")
     
-    pk = os.getenv("FIREBASE_PRIVATE_KEY")
-    email = os.getenv("FIREBASE_CLIENT_EMAIL")
-    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
+    email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
     
     if not pk or not email or not project_id:
-        print(f"FIRESTORE ERROR: Missing environment variables. PK:{'SET' if pk else 'MISSING'}, Email:{'SET' if email else 'MISSING'}, ProjectID:{'SET' if project_id else 'MISSING'}")
+        print("FIRESTORE ERROR: Missing environment variables.")
         return None
 
     try:
-        print("FIRESTORE DEBUG 1: Scrubbing and verifying Private Key...")
-        raw_pk = pk.strip()
-        
-        # Comprehensive quote and newline scrubbing
+        # Deep scrub
+        raw_pk = pk
         if raw_pk.startswith('"') and raw_pk.endswith('"'): raw_pk = raw_pk[1:-1]
-        if raw_pk.startswith("'") and raw_pk.endswith("'"): raw_pk = raw_pk[1:-1]
         
-        clean_pk = raw_pk.replace("\\n", "\n")
-        
-        # Ensure header/footer are correctly spaced
-        clean_pk = clean_pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        clean_pk = clean_pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-        # Kill any double newlines created above
-        clean_pk = clean_pk.replace("\n\n", "\n")
+        # Handle cases where newlines might be double-escaped
+        clean_pk = raw_pk.replace("\\\\n", "\n").replace("\\n", "\n")
         
         if "-----BEGIN PRIVATE KEY-----" not in clean_pk:
-            print("FIRESTORE ERROR: PEM Header missing. Check your Render ENV var.")
+            print("FIRESTORE ERROR: Invalid PEM Header.")
             return None
             
-        print(f"FIRESTORE DEBUG 2: Credentials ready for Email: {email}")
+        # Ensure proper newline separation for PEM
+        if not clean_pk.startswith("-----BEGIN PRIVATE KEY-----\n"):
+            clean_pk = clean_pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        if not clean_pk.endswith("\n-----END PRIVATE KEY-----"):
+            clean_pk = clean_pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+
         info = {
             "project_id": project_id,
             "private_key": clean_pk,
@@ -52,19 +49,11 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        
-        print("FIRESTORE DEBUG 3: Initializing Firestore client...")
         _db = firestore.Client(credentials=creds, project=project_id)
-        
-        # Test connection with a very short timeout
-        print("FIRESTORE DEBUG 4: Testing connection...")
-        # Since this can hang, we just return and hope for the best in the first call
-        print("FIRESTORE SUCCESS: Connected")
+        print("FIRESTORE SUCCESS: Client Initialized")
         return _db
     except Exception as e:
-        msg = f"FIRESTORE CRASH: {str(e)}"
-        print(msg)
-        os.environ["FIREBASE_INIT_ERROR"] = msg
+        print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
         return None
 
 class FirestoreDB:
@@ -73,7 +62,8 @@ class FirestoreDB:
         database = get_db()
         if not database: return []
         try:
-            docs = database.collection("staff").stream()
+            # We use a short timeout here to avoid the 300s hang
+            docs = database.collection("staff").stream(timeout=10)
             staff_list = []
             for doc in docs:
                 data = doc.to_dict()
@@ -81,7 +71,11 @@ class FirestoreDB:
                 staff_list.append(data)
             return staff_list
         except Exception as e:
-            print(f"Firestore get_staff Error: {e}")
+            msg = str(e)
+            if "invalid_grant" in msg:
+                print("AUTH ERROR: Invalid JWT Signature. Check your Private Key on Render.")
+            else:
+                print(f"Firestore get_staff Error: {msg}")
             return []
 
     # Other methods simplified for safety
