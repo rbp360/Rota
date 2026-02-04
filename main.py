@@ -33,14 +33,35 @@ async def health(request: Request):
     if request.method == "HEAD":
         return JSONResponse(status_code=200, content={"status": "ok"})
     
-    # ULTRALIGHT HEALTH CHECK - v5.5.21
+    # ULTRALIGHT HEALTH CHECK - v5.5.30
     # We do NOT touch the DB here to avoid 502 timeouts during boot or sync
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.26",
-        "msg": "Server is listening (v5.5.26)"
+        "version": "5.5.30",
+        "msg": "Self-Healing App Ready (v5.5.30)"
     }
+
+@app.get("/api/test-auth")
+def test_auth():
+    """Diagnostic tool to check real-time auth status on Render."""
+    try:
+        from backend.database_firestore import get_db, reset_db
+        # Force a fresh attempt
+        reset_db()
+        db = get_db()
+        if not db:
+            return {"status": "error", "reason": "Could not initialize client (check logs)"}
+        
+        # Try a real read
+        all_staff = db.collection("staff").limit(1).get()
+        return {
+            "status": "success",
+            "message": "Authenticated and wrote to Firestore successfully",
+            "staff_count_peek": len(all_staff)
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @app.get("/api/quick-health")
 def quick_health():

@@ -7,12 +7,20 @@ import re
 # Global variables
 _db = None
 
-def get_db():
+def reset_db():
     global _db
+    _db = None
+    print("FIRESTORE: Connection cleared for reset.")
+
+def get_db(force_refresh=False):
+    global _db
+    if force_refresh:
+        _db = None
+
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.24)...")
+    print("FIRESTORE: Initializing (v5.5.30 - Self-Healing)...")
     
     # Lazy imports to save memory on startup
     from google.cloud import firestore
@@ -29,23 +37,18 @@ def get_db():
 
     try:
         # 2. Extract Key Material
-        # Handle literal \n first
         pk_clean = pk.replace("\\n", "\n")
-        
-        # Use dashes to isolate the core
         parts = pk_clean.split("-----")
         meat = max(parts, key=len)
         
         # 3. PLUS RECOVERY STRATEGY
-        # If the key has spaces but NO plus signs, it's 100% a mangled paste.
         if " " in meat and "+" not in meat:
-            print("FIRESTORE: Space-to-Plus recovery triggered.")
             meat = meat.replace(" ", "+")
         
-        # 4. FINAL CLEANSE: Remove everything not in the Base64 alphabet
+        # 4. FINAL CLEANSE
         meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
         
-        # 5. REBUILD PERFECT PEM WITH 64-CHAR WRAP
+        # 5. REBUILD PEM
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
@@ -57,16 +60,10 @@ def get_db():
             "type": "service_account"
         }
         
-        # Log basic info for verification (masked)
-        print(f"FIRESTORE: Project '{project_id}', Email '{email[:3]}...{email[-10:]}'")
-        print(f"FIRESTORE: Key Length: {len(meat)} characters")
-        
         creds = service_account.Credentials.from_service_account_info(info)
         _db = firestore.Client(credentials=creds, project=project_id)
         
-        # Trigger a test check to catch invalid_grant here instead of during sync
-        # But we'll skip it for speed unless it keeps failing.
-        print("FIRESTORE SUCCESS: Connection object created.")
+        print(f"FIRESTORE SUCCESS: (v5.5.30) - Key Length: {len(meat)}")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
