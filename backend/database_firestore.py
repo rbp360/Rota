@@ -12,7 +12,7 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.22)...")
+    print("FIRESTORE: Initializing (v5.5.23)...")
     
     # Lazy imports to save memory on startup
     from google.cloud import firestore
@@ -31,12 +31,16 @@ def get_db():
         parts = pk.split("-----")
         meat = max(parts, key=len)
         
-        # 2. IRONCLAD SCRUBBER: Remove everything except valid Base64 characters
-        # This removes \n, literal \n, spaces, quotes, etc.
+        # 2. SPACE-TO-PLUS CORRECTION
+        # Common issue: UI fields often translate '+' to ' ' during paste.
+        # We restore them before scrubbing.
+        meat = meat.replace(' ', '+')
+        
+        # 3. IRONCLAD SCRUBBER: Remove everything except valid Base64 characters
+        # This removes \n, literal \n, quotes, etc.
         meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
         
-        # 3. REBUILD PERFECT PEM WITH 64-CHAR WRAP
-        # Some libraries REQUIRE the 64-char line breaks for valid JWT signing
+        # 4. REBUILD PERFECT PEM WITH 64-CHAR WRAP
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
@@ -49,7 +53,6 @@ def get_db():
         }
         
         creds = service_account.Credentials.from_service_account_info(info)
-        # Using default client
         _db = firestore.Client(credentials=creds, project=project_id)
         
         print(f"FIRESTORE SUCCESS: Connected (Cleaned Meat: {len(meat)} chars)")

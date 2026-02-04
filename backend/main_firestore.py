@@ -101,7 +101,7 @@ async def import_staff_bridge(request: Request):
         batch.commit()
         return {"imported": count, "status": "success"}
     except Exception as e:
-        print(f"BATH COMMIT FAILED: {e}")
+        print(f"BATCH COMMIT FAILED: {e}")
         return {"error": str(e), "imported": 0}
 
 @app.get("/api/staff")
