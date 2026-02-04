@@ -20,10 +20,11 @@ def get_db(force_refresh=False):
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.32 - Pure B64 Scrubber)...")
+    print("FIRESTORE: Initializing (v5.5.33 - Longest Segment strategy)...")
     
     from google.cloud import firestore
     from google.oauth2 import service_account
+    import re
     
     pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip().strip('"').strip("'")
     email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip().strip('"').strip("'")
@@ -34,28 +35,30 @@ def get_db(force_refresh=False):
         return None
 
     try:
-        # 1. THE NUCLEAR SCRUBBER
-        # Remove literal \n, headers, footers, and all whitespace
-        clean = pk.replace("\\n", "").replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-        clean = "".join(clean.split()) # Remove all whitespace/newlines
+        # 1. Clean noise but RETAIN separation
+        # We replace literal \n and dashes with spaces so re.findall can see segments
+        clean = pk.replace("\\n", " ").replace("-----", " ")
         
-        # 2. Extract ONLY valid Base64 characters
-        import re
-        # This regex isolates the core Base64 blob
-        match = re.search(r'([A-Za-z0-9+/=]+)', clean)
-        if not match:
-            print("FIRESTORE ERROR: No valid Base64 found in key.")
+        # 2. Extract ONLY valid chunks of Base64 that are long enough to be a key
+        # The private_key_id is 40 chars, the Key is >1500 chars.
+        chunks = re.findall(r'[A-Za-z0-9+/=]{100,}', clean)
+        if not chunks:
+            # Fallback for shorter keys/IDs
+            chunks = re.findall(r'[A-Za-z0-9+/=]{30,}', clean)
+        
+        if not chunks:
+            print("FIRESTORE ERROR: No Base64 segments found in key variable.")
             return None
+            
+        # 3. SELECT THE KEY: It is mathematically guaranteed to be the longest chunk
+        meat = max(chunks, key=len)
         
-        meat = match.group(1)
-        
-        # 3. Padding Correction
-        # If there's an '=' in the middle, it's noise. Move them all to the end.
+        # 4. Standard Re-padding
         meat = meat.replace("=", "")
         while len(meat) % 4 != 0:
             meat += "="
 
-        # 4. Reconstruct with strict 64-char wrapping
+        # 5. Reconstruct Perfect PEM
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
@@ -70,7 +73,7 @@ def get_db(force_refresh=False):
         creds = service_account.Credentials.from_service_account_info(info)
         _db = firestore.Client(credentials=creds, project=project_id)
         
-        print(f"FIRESTORE SUCCESS: (v5.5.32) - B64 Scrub Complete.")
+        print(f"FIRESTORE SUCCESS: (v5.5.33) - Identified Key ({len(meat)} chars).")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")

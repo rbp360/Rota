@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.32",
-        "msg": "Pure B64 Scrubber Active (v5.5.32)"
+        "version": "5.5.33",
+        "msg": "Longest Segment Extractor Active (v5.5.33)"
     }
 
 @app.get("/api/test-auth")
