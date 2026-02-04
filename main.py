@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.31",
-        "msg": "Atomic PEM Reconstructor Ready (v5.5.31)"
+        "version": "5.5.32",
+        "msg": "Pure B64 Scrubber Active (v5.5.32)"
     }
 
 @app.get("/api/test-auth")

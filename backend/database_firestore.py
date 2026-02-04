@@ -20,7 +20,7 @@ def get_db(force_refresh=False):
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.31 - Atomic PEM Fix)...")
+    print("FIRESTORE: Initializing (v5.5.32 - Pure B64 Scrubber)...")
     
     from google.cloud import firestore
     from google.oauth2 import service_account
@@ -34,35 +34,28 @@ def get_db(force_refresh=False):
         return None
 
     try:
-        # 1. Forensic Extraction: Isolate the Base64 "Meat"
-        # We handle literal \n, real newlines, and dash-wrappers in one go
-        raw = pk.replace("\\n", "\n")
-        parts = raw.split("-----")
-        # The meat is the longest block that ISN'T a header/footer
-        meat = ""
-        for p in parts:
-            p = p.strip()
-            if len(p) > len(meat) and "PRIVATE KEY" not in p:
-                meat = p
+        # 1. THE NUCLEAR SCRUBBER
+        # Remove literal \n, headers, footers, and all whitespace
+        clean = pk.replace("\\n", "").replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+        clean = "".join(clean.split()) # Remove all whitespace/newlines
         
-        # 2. Character Cleanup
-        # Remove all whitespace/newlines from the meat
-        meat = "".join(meat.split())
+        # 2. Extract ONLY valid Base64 characters
+        import re
+        # This regex isolates the core Base64 blob
+        match = re.search(r'([A-Za-z0-9+/=]+)', clean)
+        if not match:
+            print("FIRESTORE ERROR: No valid Base64 found in key.")
+            return None
         
-        # 3. Plus Recovery (common paste error)
-        if " " in meat and "+" not in meat:
-            meat = meat.replace(" ", "+")
-            
-        # 4. Padding Correction (The 'InvalidByte 61' Fix)
-        # `=` is only allowed at the END. We strip internal ones.
-        meat = meat.rstrip("=") # Temporarily remove valid padding
-        meat = meat.replace("=", "") # Remove any accidental internal ones
+        meat = match.group(1)
         
-        # Add back correct padding (Base64 must be multiple of 4)
+        # 3. Padding Correction
+        # If there's an '=' in the middle, it's noise. Move them all to the end.
+        meat = meat.replace("=", "")
         while len(meat) % 4 != 0:
             meat += "="
 
-        # 5. Reconstruct Perfect PEM with 64-char lines
+        # 4. Reconstruct with strict 64-char wrapping
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
@@ -77,7 +70,7 @@ def get_db(force_refresh=False):
         creds = service_account.Credentials.from_service_account_info(info)
         _db = firestore.Client(credentials=creds, project=project_id)
         
-        print(f"FIRESTORE SUCCESS: (v5.5.31) - Clean PEM Ready.")
+        print(f"FIRESTORE SUCCESS: (v5.5.32) - B64 Scrub Complete.")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
