@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.24",
-        "msg": "Server is listening (v5.5.24)"
+        "version": "5.5.26",
+        "msg": "Server is listening (v5.5.26)"
     }
 
 @app.get("/api/quick-health")
@@ -179,6 +179,11 @@ def check_availability(periods: str, day: str = "Monday", date: str = None):
 async def handle_import(request: Request):
     from backend.main_firestore import import_staff_bridge
     return await import_staff_bridge(request)
+
+@app.post("/api/import-absences")
+async def handle_import_absences(request: Request):
+    from backend.main_firestore import import_absences_bridge
+    return await import_absences_bridge(request)
 
 # 8. SERVE FRONTEND (Catch-all)
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")

@@ -108,6 +108,57 @@ async def import_staff_bridge(request: Request):
 def get_staff():
     return FirestoreDB.get_staff()
 
+@app.post("/api/import-absences")
+async def import_absences_bridge(request: Request):
+    try:
+        data = await request.json()
+    except:
+        return {"error": "Invalid JSON"}
+
+    from .database_firestore import get_db
+    db = get_db()
+    if not db:
+        return {"error": "Firestore not connected"}
+    
+    count = 0
+    batch = db.batch()
+    
+    for a in data:
+        try:
+            abs_id = str(a["id"])
+            abs_ref = db.collection("absences").document(abs_id)
+            
+            # 1. Main Absence record
+            batch.set(abs_ref, {
+                "staff_id": str(a["staff_id"]),
+                "staff_name": a["staff_name"],
+                "date": a["date"],
+                "start_period": a.get("start_period"),
+                "end_period": a.get("end_period")
+            })
+
+            # 2. Add covers if present
+            if "covers" in a:
+                for c in a["covers"]:
+                    cover_id = str(c["period"])
+                    cover_ref = abs_ref.collection("covers").document(cover_id)
+                    batch.set(cover_ref, {
+                        "period": c["period"],
+                        "staff_name": c["staff_name"],
+                        "covering_staff_id": str(c.get("covering_staff_id", ""))
+                    })
+            
+            count += 1
+        except Exception as e:
+            print(f"Error preparing absence batch: {e}")
+
+    try:
+        batch.commit()
+        return {"imported_absences": count, "status": "success"}
+    except Exception as e:
+        print(f"ABSENCE BATCH FAILED: {e}")
+        return {"error": str(e), "imported": 0}
+
 @app.post("/api/absences")
 def log_absence(staff_name: str, date: str, start_period: int, end_period: int):
     staff = FirestoreDB.get_staff_member(name=staff_name)
