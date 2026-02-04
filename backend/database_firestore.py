@@ -183,3 +183,27 @@ class FirestoreDB:
             database.collection("absences").document(absence_id).collection("covers").document(str(period)).delete()
             return True
         except: return False
+
+    @staticmethod
+    def update_schedule(staff_id, day, period, activity, is_free):
+        database = get_db()
+        if not database: return False
+        try:
+            sched_id = f"{day}_{period}"
+            database.collection("staff").document(staff_id).collection("schedules").document(sched_id).set({
+                "day_of_week": day,
+                "period": period,
+                "activity": activity,
+                "is_free": is_free
+            })
+            return True
+        except: return False
+
+    @staticmethod
+    def update_staff(staff_id, data):
+        database = get_db()
+        if not database: return False
+        try:
+            database.collection("staff").document(staff_id).update(data)
+            return True
+        except: return False

@@ -85,7 +85,7 @@ def ping():
     return {"msg": "pong", "timestamp": str(os.urandom(4).hex())}
 
 @app.get("/api/staff-schedule/{staff_name}")
-def get_staff_schedule(staff_name: str, day: str = "Monday"):
+def get_staff_schedule(staff_name: str, day: str = None):
     try:
         from backend.database_firestore import FirestoreDB
         staff = FirestoreDB.get_staff_member(name=staff_name)
@@ -205,6 +205,20 @@ async def handle_import(request: Request):
 async def handle_import_absences(request: Request):
     from backend.main_firestore import import_absences_bridge
     return await import_absences_bridge(request)
+
+@app.post("/api/update-schedule")
+async def handle_update_schedule(staff_id: str, day: str, period: int, activity: str, is_free: bool):
+    from backend.database_firestore import FirestoreDB
+    success = FirestoreDB.update_schedule(staff_id, day, period, activity, is_free)
+    if success: return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Failed to update schedule")
+
+@app.post("/api/update-staff")
+async def handle_update_staff(staff_id: str, data: dict):
+    from backend.database_firestore import FirestoreDB
+    success = FirestoreDB.update_staff(staff_id, data)
+    if success: return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Failed to update staff info")
 
 # 8. SERVE FRONTEND (Catch-all)
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")

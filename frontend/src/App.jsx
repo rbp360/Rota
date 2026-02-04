@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Calendar, ShieldCheck, Settings, MessageSquare, AlertCircle, CheckCircle, RotateCcw } from 'lucide-react';
+import { UserPlus, Calendar, ShieldCheck, Settings, MessageSquare, AlertCircle, CheckCircle, RotateCcw, User, Save, Edit } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -26,6 +26,11 @@ const App = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [absentSchedule, setAbsentSchedule] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
+
+  const [managerStaff, setManagerStaff] = useState(null); // {id, name}
+  const [managerSchedule, setManagerSchedule] = useState([]);
+  const [managerLoading, setManagerLoading] = useState(false);
+  const [managerSaving, setManagerSaving] = useState(false);
 
   useEffect(() => {
     const today = new Date();
@@ -98,10 +103,10 @@ const App = () => {
         }
 
         const ignore = ["TBC", "External", "Coach", "Room", "Music Room", "Hall", "Gym", "Pitch", "Court", "Pool", "Library", "PRE NURSERY", "PRE NUSERY", "Outside Prov.", "**", "gate", "locked", "at", "8.30", "Mr", "1", "Calire", "?", "Duty"];
-        const cleanList = res.data.map(s => s.name).filter(n => n && !ignore.some(i => n.toLowerCase().includes(i.toLowerCase())));
+        const cleanList = res.data.filter(s => s.name && !ignore.some(i => s.name.toLowerCase().includes(i.toLowerCase())));
 
         console.log(`Filtered staff list count: ${cleanList.length}`);
-        setStaffList(cleanList.sort());
+        setStaffList(cleanList.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
         console.error("Failed to fetch staff:", err);
       }
@@ -289,6 +294,47 @@ const App = () => {
     }
   };
 
+  const fetchManagerSchedule = async (staffName) => {
+    if (!staffName) return;
+    setManagerLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/staff-schedule/${staffName}`);
+      setManagerSchedule(res.data);
+    } catch (err) {
+      console.error("Failed to fetch manager schedule:", err);
+      setToast({ type: 'error', message: 'Failed to load schedule.' });
+    } finally {
+      setManagerLoading(false);
+    }
+  };
+
+  const handleUpdateSchedule = async (day, period, activity, isFree) => {
+    if (!managerStaff) return;
+    setManagerSaving(true);
+    try {
+      await axios.post(`${API_URL}/update-schedule`, null, {
+        params: {
+          staff_id: managerStaff.id,
+          day,
+          period,
+          activity,
+          is_free: isFree
+        }
+      });
+    } catch (err) {
+      console.error("Failed to update schedule:", err);
+      fetchManagerSchedule(managerStaff.name);
+      setToast({ type: 'error', message: 'Failed to save change.' });
+    } finally {
+      setManagerSchedule(prev => {
+        const next = prev.filter(s => !(s.day_of_week === day && s.period === period));
+        next.push({ day_of_week: day, period, activity, is_free: isFree });
+        return next;
+      });
+      setManagerSaving(false);
+    }
+  };
+
 
   return (
     <div className="container">
@@ -456,6 +502,7 @@ const App = () => {
 
           <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence</button>
           <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Daily Rota</button>
+          <button onClick={() => setActiveTab('manager')} className={activeTab === 'manager' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Staff Schedules</button>
           <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}><Settings size={16} /></button>
         </div>
       </header>
@@ -522,7 +569,7 @@ const App = () => {
                   <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Select Staff</label>
                   <select style={{ padding: '0.5rem', fontSize: '0.875rem' }} value={absentPerson} onChange={(e) => { setAbsentPerson(e.target.value); setCoveredPeriods([]); setDetailedCovers({}); setCurrentAbsenceId(null); setSuggestions(null); }}>
                     <option value="">Select a person...</option>
-                    {staffList.map(s => <option key={s} value={s}>{s}</option>)}
+                    {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                 </div>
 
@@ -811,6 +858,121 @@ const App = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {activeTab === 'manager' && (
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="glass" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+              <div>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--primary)', margin: 0 }}>
+                  <User size={28} /> Schedule Manager
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Management Desk: Live edit teacher availability</p>
+              </div>
+              <div style={{ minWidth: '250px' }}>
+                <select
+                  className="glass"
+                  style={{ padding: '0.75rem', width: '100%', fontSize: '1rem', fontWeight: '600' }}
+                  onChange={(e) => {
+                    const staff = staffList.find(s => s.name === e.target.value);
+                    setManagerStaff(staff);
+                    fetchManagerSchedule(staff.name);
+                  }}
+                  value={managerStaff?.name || ''}
+                >
+                  <option value="">Select Staff Member...</option>
+                  {staffList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {managerLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem' }}>
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  style={{ width: '40px', height: '40px', border: '4px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }} />
+              </div>
+            ) : managerStaff ? (
+              <div style={{ overflowX: 'auto', borderRadius: '1rem', border: '1px solid var(--border)' }}>
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(43, 83, 196, 0.05)' }}>
+                      <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>Period</th>
+                      {days.map(d => (
+                        <th key={d} style={{ padding: '1rem', textAlign: 'center', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>{d}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                      <tr key={p} style={{ background: p % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
+                        <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>P{p}</td>
+                        {days.map(d => {
+                          const item = managerSchedule.find(s => s.day_of_week === d && s.period === p);
+                          const isFree = item?.is_free || false;
+
+                          return (
+                            <td key={d} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', minWidth: '180px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <input
+                                  type="text"
+                                  defaultValue={item?.activity || ''}
+                                  onBlur={(e) => {
+                                    if (e.target.value !== (item?.activity || '')) {
+                                      handleUpdateSchedule(d, p, e.target.value, isFree);
+                                    }
+                                  }}
+                                  placeholder="Activity name..."
+                                  style={{
+                                    padding: '0.5rem',
+                                    borderRadius: '0.5rem',
+                                    border: '1px solid var(--border)',
+                                    fontSize: '0.875rem',
+                                    background: isFree ? 'rgba(16, 185, 129, 0.05)' : 'white'
+                                  }}
+                                />
+                                <button
+                                  onClick={() => handleUpdateSchedule(d, p, item?.activity || '', !isFree)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    background: isFree ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
+                                    color: isFree ? 'white' : 'var(--text-muted)',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  {isFree ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                                  {isFree ? 'AVAILABLE FOR COVER' : 'BUSY / TEACHING'}
+                                </button>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '5rem', background: 'rgba(0,0,0,0.02)', borderRadius: '1rem', border: '2px dashed var(--border)' }}>
+                <User size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+                <h3>No Staff Selected</h3>
+                <p style={{ color: 'var(--text-muted)' }}>Choose a teacher from the dropdown to start managing their schedule.</p>
+              </div>
+            )}
+
+            {managerSaving && (
+              <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', background: 'var(--primary)', color: 'white', padding: '0.5rem 1rem', borderRadius: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                <Save size={16} /> Saving changes...
               </div>
             )}
           </motion.div>

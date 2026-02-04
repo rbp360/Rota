@@ -223,3 +223,15 @@ def get_daily_rota(date: str):
     target_date = parser.parse(date).strftime('%Y-%m-%d')
     absences = FirestoreDB.get_absences(date=target_date)
     return absences
+
+@app.post("/api/update-schedule")
+async def update_schedule(staff_id: str, day: str, period: int, activity: str, is_free: bool):
+    success = FirestoreDB.update_schedule(staff_id, day, period, activity, is_free)
+    if success: return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Failed to update schedule")
+
+@app.post("/api/update-staff")
+async def update_staff(staff_id: str, data: dict):
+    success = FirestoreDB.update_staff(staff_id, data)
+    if success: return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Failed to update staff info")
