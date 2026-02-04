@@ -31,6 +31,7 @@ const App = () => {
   const [managerSchedule, setManagerSchedule] = useState([]);
   const [managerLoading, setManagerLoading] = useState(false);
   const [managerSaving, setManagerSaving] = useState(false);
+  const [managerViewMode, setManagerViewMode] = useState('periods'); // 'periods' or 'extra'
 
   useEffect(() => {
     const today = new Date();
@@ -428,29 +429,37 @@ const App = () => {
                   })}
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '380px', overflowY: 'auto', paddingRight: '4px' }}>
                   {(() => {
                     const activePeriods = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].filter(p => {
                       const sch = absentSchedule.find(s => s.period === p);
-                      return (p >= 1 && p <= 8) || (sch && !sch.is_free);
+                      return (p >= 1 && p <= 8) || (sch && sch.activity);
                     }).sort((a, b) => a - b);
 
                     if (activePeriods.length === 0) return null;
 
                     let summaryParts = [];
-                    let currentStaff = detailedCovers[activePeriods[0]] || null;
+                    const firstP = activePeriods[0];
+                    const firstSch = absentSchedule.find(s => s.period === firstP);
+                    let currentStaff = detailedCovers[firstP] || null;
+                    let currentActivity = firstSch?.activity || "Period Activity";
+                    let currentIsFree = firstSch?.is_free || false;
                     let rangeStartIdx = 0;
 
                     for (let i = 1; i <= activePeriods.length; i++) {
                       const p = activePeriods[i];
+                      const sch = absentSchedule.find(s => s.period === p);
                       const staff = detailedCovers[p] || null;
+                      const activity = sch?.activity || "Period Activity";
+                      const isFree = sch?.is_free || false;
 
-                      // Split if staff changes OR if there is a gap in periods OR end of list
                       const isEnd = i === activePeriods.length;
                       const isGap = !isEnd && (activePeriods[i] !== activePeriods[i - 1] + 1);
                       const isStaffChange = !isEnd && staff !== currentStaff;
+                      const isActivityChange = !isEnd && activity !== currentActivity;
+                      const isFreeChange = !isEnd && isFree !== currentIsFree;
 
-                      if (isEnd || isGap || isStaffChange) {
+                      if (isEnd || isGap || isStaffChange || isActivityChange || isFreeChange) {
                         const startP = activePeriods[rangeStartIdx];
                         const endP = activePeriods[i - 1];
 
@@ -464,11 +473,13 @@ const App = () => {
                         };
 
                         const range = startP === endP ? formatP(startP) : `${formatP(startP)}-${formatP(endP)}`;
-                        summaryParts.push({ range, staff: currentStaff });
+                        summaryParts.push({ range, staff: currentStaff, activity: currentActivity, isFree: currentIsFree });
 
                         if (!isEnd) {
                           rangeStartIdx = i;
                           currentStaff = staff;
+                          currentActivity = activity;
+                          currentIsFree = isFree;
                         }
                       }
                     }
@@ -478,14 +489,25 @@ const App = () => {
                         fontSize: '0.8rem',
                         padding: '0.65rem',
                         borderRadius: '0.5rem',
-                        background: !part.staff ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                        color: !part.staff ? 'var(--danger)' : 'var(--accent)',
-                        borderLeft: `4px solid ${!part.staff ? 'var(--danger)' : 'var(--accent)'}`,
+                        background: part.isFree ? 'rgba(0,0,0,0.03)' : (!part.staff ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
+                        color: part.isFree ? 'var(--text-muted)' : (!part.staff ? 'var(--danger)' : 'var(--accent)'),
+                        borderLeft: `4px solid ${part.isFree ? 'var(--border)' : (!part.staff ? 'var(--danger)' : 'var(--accent)')}`,
                         display: 'flex',
-                        justifyContent: 'space-between'
+                        flexDirection: 'column',
+                        gap: '2px'
                       }}>
-                        <span style={{ fontWeight: 600 }}>{part.range}</span>
-                        <span>{part.staff ? part.staff : 'HOLE'}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600 }}>{part.range}</span>
+                          <span style={{ fontSize: '0.7rem' }}>{part.isFree ? 'No cover required' : (part.staff ? 'Covered' : 'Needs Cover')}</span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem' }}>
+                          {part.isFree ? <i>{part.activity}</i> : <strong>{part.activity}</strong>}
+                        </div>
+                        {part.staff && !part.isFree && (
+                          <div style={{ fontSize: '0.75rem', marginTop: '2px', opacity: 0.9 }}>
+                            By: {part.staff}
+                          </div>
+                        )}
                       </div>
                     ));
                   })()}
@@ -590,7 +612,7 @@ const App = () => {
                       if (p === 13) label = "CCA";
 
                       // If absent person has a specific duty here, show it in title
-                      const title = scheduleItem && !scheduleItem.is_free ? scheduleItem.activity : `Period ${p}`;
+                      const title = scheduleItem ? (scheduleItem.is_free ? `Available: ${scheduleItem.activity}` : scheduleItem.activity) : `Period ${p}`;
 
                       // Only show button if: 
                       // 1. It is a teaching period (1-8)
@@ -895,72 +917,105 @@ const App = () => {
                   style={{ width: '40px', height: '40px', border: '4px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%' }} />
               </div>
             ) : managerStaff ? (
-              <div style={{ overflowX: 'auto', borderRadius: '1rem', border: '1px solid var(--border)' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-                  <thead>
-                    <tr style={{ background: 'rgba(43, 83, 196, 0.05)' }}>
-                      <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>Period</th>
-                      {days.map(d => (
-                        <th key={d} style={{ padding: '1rem', textAlign: 'center', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>{d}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
-                      <tr key={p} style={{ background: p % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
-                        <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>P{p}</td>
-                        {days.map(d => {
-                          const item = managerSchedule.find(s => s.day_of_week === d && s.period === p);
-                          const isFree = item?.is_free || false;
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => setManagerViewMode('periods')}
+                    className={managerViewMode === 'periods' ? 'btn-nav' : 'glass'}
+                    style={{ padding: '0.5rem 1.5rem', fontSize: '0.85rem' }}
+                  >
+                    Teaching Periods (1-8)
+                  </button>
+                  <button
+                    onClick={() => setManagerViewMode('extra')}
+                    className={managerViewMode === 'extra' ? 'btn-nav' : 'glass'}
+                    style={{ padding: '0.5rem 1.5rem', fontSize: '0.85rem' }}
+                  >
+                    Duties & CCA
+                  </button>
+                </div>
 
-                          return (
-                            <td key={d} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', minWidth: '180px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <input
-                                  type="text"
-                                  defaultValue={item?.activity || ''}
-                                  onBlur={(e) => {
-                                    if (e.target.value !== (item?.activity || '')) {
-                                      handleUpdateSchedule(d, p, e.target.value, isFree);
-                                    }
-                                  }}
-                                  placeholder="Activity name..."
-                                  style={{
-                                    padding: '0.5rem',
-                                    borderRadius: '0.5rem',
-                                    border: '1px solid var(--border)',
-                                    fontSize: '0.875rem',
-                                    background: isFree ? 'rgba(16, 185, 129, 0.05)' : 'white'
-                                  }}
-                                />
-                                <button
-                                  onClick={() => handleUpdateSchedule(d, p, item?.activity || '', !isFree)}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    border: 'none',
-                                    background: isFree ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
-                                    color: isFree ? 'white' : 'var(--text-muted)',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                >
-                                  {isFree ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                                  {isFree ? 'AVAILABLE FOR COVER' : 'BUSY / TEACHING'}
-                                </button>
-                              </div>
-                            </td>
-                          );
-                        })}
+                <div style={{ overflowX: 'auto', borderRadius: '1rem', border: '1px solid var(--border)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(43, 83, 196, 0.05)' }}>
+                        <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '2px solid var(--primary)', color: 'var(--primary)', width: '120px' }}>Slot</th>
+                        {days.map(d => (
+                          <th key={d} style={{ padding: '1rem', textAlign: 'center', borderBottom: '2px solid var(--primary)', color: 'var(--primary)' }}>{d}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(managerViewMode === 'periods' ? [1, 2, 3, 4, 5, 6, 7, 8] : [0, 11, 9, 10, 13]).map(p => {
+                        const getLabel = (p) => {
+                          if (p === 0) return "Morning";
+                          if (p === 11) return "Break";
+                          if (p === 9) return "Lunch";
+                          if (p === 10) return "AfterSch";
+                          if (p === 13) return "CCA";
+                          return `Period ${p}`;
+                        };
+
+                        return (
+                          <tr key={p} style={{ background: p % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
+                            <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>{getLabel(p)}</td>
+                            {days.map(d => {
+                              const item = managerSchedule.find(s => s.day_of_week === d && s.period === p);
+                              const isFree = item?.is_free || false;
+                              const hasActivity = item?.activity && item.activity.trim() !== "";
+
+                              return (
+                                <td key={d} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', minWidth: '180px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <input
+                                      type="text"
+                                      key={`${managerStaff.id}_${d}_${p}_${item?.activity}`}
+                                      defaultValue={item?.activity || ''}
+                                      onBlur={(e) => {
+                                        if (e.target.value !== (item?.activity || '')) {
+                                          handleUpdateSchedule(d, p, e.target.value, isFree);
+                                        }
+                                      }}
+                                      placeholder="Activity name..."
+                                      style={{
+                                        padding: '0.5rem',
+                                        borderRadius: '0.5rem',
+                                        border: !hasActivity ? '1px solid #fbbf24' : '1px solid var(--border)',
+                                        fontSize: '0.875rem',
+                                        background: !hasActivity ? 'rgba(251, 191, 36, 0.15)' : (isFree ? 'rgba(16, 185, 129, 0.05)' : 'white'),
+                                        transition: 'all 0.3s ease'
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdateSchedule(d, p, item?.activity || '', !isFree)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        border: 'none',
+                                        background: isFree ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
+                                        color: isFree ? 'white' : 'var(--text-muted)',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                    >
+                                      {isFree ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                                      {isFree ? 'AVAILABLE FOR COVER' : 'BUSY / TEACHING'}
+                                    </button>
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '5rem', background: 'rgba(0,0,0,0.02)', borderRadius: '1rem', border: '2px dashed var(--border)' }}>
