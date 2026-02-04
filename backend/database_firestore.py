@@ -20,60 +20,56 @@ def get_db(force_refresh=False):
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.33 - Longest Segment strategy)...")
+    print("FIRESTORE: Initializing (v5.5.40 - Ironclad Hex Codec)...")
     
     from google.cloud import firestore
     from google.oauth2 import service_account
-    import re
+    import binascii
+    import json
     
-    pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip().strip('"').strip("'")
-    email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip().strip('"').strip("'")
-    project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip().strip('"').strip("'")
+    # 1. Check for the NEW high-reliability Hex variable
+    hex_key = os.getenv("FIREBASE_KEY_HEX", "").strip()
+    
+    if hex_key:
+        try:
+            # Reconstruct the ENTIRE JSON from hex (0% chance of corruption)
+            json_data = json.loads(binascii.unhexlify(hex_key).decode('utf-8'))
+            creds = service_account.Credentials.from_service_account_info(json_data)
+            _db = firestore.Client(credentials=creds, project=json_data["project_id"])
+            print("FIRESTORE SUCCESS: (v5.5.40) - Decoded via HEX.")
+            return _db
+        except Exception as e:
+            print(f"FIRESTORE HEX DECODE ERROR: {e}")
+            # Fallback to standard methods...
+
+    # 2. LEGACY FALLBACK (The Old logic)
+    pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
+    email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
     
     if not pk or not email or not project_id:
-        print(f"FIRESTORE ERROR: Missing variables (P:{bool(project_id)} E:{bool(email)} K:{bool(pk)})")
+        print("FIRESTORE ERROR: No connection data found.")
         return None
 
     try:
-        # 1. Clean noise but RETAIN separation
-        # We replace literal \n and dashes with spaces so re.findall can see segments
+        # Nuclear PEM scrubber for legacy pastes
+        import re
         clean = pk.replace("\\n", " ").replace("-----", " ")
-        
-        # 2. Extract ONLY valid chunks of Base64 that are long enough to be a key
-        # The private_key_id is 40 chars, the Key is >1500 chars.
         chunks = re.findall(r'[A-Za-z0-9+/=]{100,}', clean)
-        if not chunks:
-            # Fallback for shorter keys/IDs
-            chunks = re.findall(r'[A-Za-z0-9+/=]{30,}', clean)
-        
-        if not chunks:
-            print("FIRESTORE ERROR: No Base64 segments found in key variable.")
-            return None
-            
-        # 3. SELECT THE KEY: It is mathematically guaranteed to be the longest chunk
-        meat = max(chunks, key=len)
-        
-        # 4. Standard Re-padding
-        meat = meat.replace("=", "")
-        while len(meat) % 4 != 0:
-            meat += "="
-
-        # 5. Reconstruct Perfect PEM
+        if not chunks: chunks = re.findall(r'[A-Za-z0-9+/=]{30,}', clean)
+        meat = max(chunks, key=len).replace("=", "")
+        while len(meat) % 4 != 0: meat += "="
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
         info = {
-            "project_id": project_id,
-            "private_key": clean_pk,
-            "client_email": email,
-            "token_uri": "https://oauth2.googleapis.com/token",
+            "project_id": project_id, "private_key": clean_pk,
+            "client_email": email, "token_uri": "https://oauth2.googleapis.com/token",
             "type": "service_account"
         }
-        
         creds = service_account.Credentials.from_service_account_info(info)
         _db = firestore.Client(credentials=creds, project=project_id)
-        
-        print(f"FIRESTORE SUCCESS: (v5.5.33) - Identified Key ({len(meat)} chars).")
+        print("FIRESTORE SUCCESS: (v5.5.40) - Decoded via Legacy String Scrubber.")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")

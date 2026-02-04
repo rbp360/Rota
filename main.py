@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.33",
-        "msg": "Longest Segment Extractor Active (v5.5.33)"
+        "version": "5.5.40",
+        "msg": "Ironclad Hex Codec Initialized (v5.5.40)"
     }
 
 @app.get("/api/test-auth")
