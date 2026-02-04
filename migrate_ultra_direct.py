@@ -3,7 +3,7 @@ import json
 import time
 
 # 🆘 STEP 0: EXPLICITLY RE-FIX THE PEM KEY (Mathematical Repair)
-JSON_PATH = "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json"
+JSON_PATH = "rotaai-49847-d923810f254e.json"
 
 def fix_json_key():
     with open(JSON_PATH) as f:

@@ -4,7 +4,7 @@ from google.oauth2 import service_account
 import google.auth.transport.requests
 
 def test_auth():
-    json_path = "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json"
+    json_path = "rotaai-49847-d923810f254e.json"
     print(f"Checking {json_path}...")
     
     if not os.path.exists(json_path):

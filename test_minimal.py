@@ -3,7 +3,7 @@ import os
 from google.oauth2 import service_account
 from google.cloud import firestore
 
-JSON_PATH = "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json"
+JSON_PATH = "rotaai-49847-d923810f254e.json"
 
 def test_minimal():
     print(f"--- MINIMAL AUTH TEST ---")

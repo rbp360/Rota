@@ -1,10 +1,16 @@
 # Secrets (NEVER PUSH THESE)
 .env
-.env.local
+.env.*
 *.env
 *.json
+# Specific Firebase Keys
+*-firebase-adminsdk-*.json
+rotaai-49847-d923810f254e.json
+service-account-*.json
+credentials.json
 !package.json
 !vercel.json
+!firebase.json
 
 # Large Data & Binaries (Fixes the 250MB limit)
 *.xlsx

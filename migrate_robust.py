@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from google.cloud import firestore
 from google.oauth2 import service_account
 
-JSON_PATH = "rotaai-49847-firebase-adminsdk-fbsvc-59f11aeb6b.json"
+JSON_PATH = "rotaai-49847-d923810f254e.json"
 DB_PATH = os.path.join("data_archive", "rota.db")
 
 def get_db():
