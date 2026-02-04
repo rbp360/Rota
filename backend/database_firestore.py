@@ -12,35 +12,40 @@ def get_db():
     if _db is not None:
         return _db
         
-    print("FIRESTORE: Initializing (v5.5.23)...")
+    print("FIRESTORE: Initializing (v5.5.24)...")
     
     # Lazy imports to save memory on startup
     from google.cloud import firestore
     from google.oauth2 import service_account
     
-    pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
-    email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
-    project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
+    # 1. Pull and scrub quotes/whitespace from ALL variables
+    pk = os.getenv("FIREBASE_PRIVATE_KEY", "").strip().strip('"').strip("'")
+    email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip().strip('"').strip("'")
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip().strip('"').strip("'")
     
     if not pk or not email or not project_id:
-        print("FIRESTORE ERROR: Missing environment variables.")
+        print(f"FIRESTORE ERROR: Missing variables (P:{bool(project_id)} E:{bool(email)} K:{bool(pk)})")
         return None
 
     try:
-        # 1. Isolate the base64 content
-        parts = pk.split("-----")
+        # 2. Extract Key Material
+        # Handle literal \n first
+        pk_clean = pk.replace("\\n", "\n")
+        
+        # Use dashes to isolate the core
+        parts = pk_clean.split("-----")
         meat = max(parts, key=len)
         
-        # 2. SPACE-TO-PLUS CORRECTION
-        # Common issue: UI fields often translate '+' to ' ' during paste.
-        # We restore them before scrubbing.
-        meat = meat.replace(' ', '+')
+        # 3. PLUS RECOVERY STRATEGY
+        # If the key has spaces but NO plus signs, it's 100% a mangled paste.
+        if " " in meat and "+" not in meat:
+            print("FIRESTORE: Space-to-Plus recovery triggered.")
+            meat = meat.replace(" ", "+")
         
-        # 3. IRONCLAD SCRUBBER: Remove everything except valid Base64 characters
-        # This removes \n, literal \n, quotes, etc.
+        # 4. FINAL CLEANSE: Remove everything not in the Base64 alphabet
         meat = re.sub(r'[^A-Za-z0-9+/=]', '', meat)
         
-        # 4. REBUILD PERFECT PEM WITH 64-CHAR WRAP
+        # 5. REBUILD PERFECT PEM WITH 64-CHAR WRAP
         lines = [meat[i:i+64] for i in range(0, len(meat), 64)]
         clean_pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
 
@@ -52,10 +57,16 @@ def get_db():
             "type": "service_account"
         }
         
+        # Log basic info for verification (masked)
+        print(f"FIRESTORE: Project '{project_id}', Email '{email[:3]}...{email[-10:]}'")
+        print(f"FIRESTORE: Key Length: {len(meat)} characters")
+        
         creds = service_account.Credentials.from_service_account_info(info)
         _db = firestore.Client(credentials=creds, project=project_id)
         
-        print(f"FIRESTORE SUCCESS: Connected (Cleaned Meat: {len(meat)} chars)")
+        # Trigger a test check to catch invalid_grant here instead of during sync
+        # But we'll skip it for speed unless it keeps failing.
+        print("FIRESTORE SUCCESS: Connection object created.")
         return _db
     except Exception as e:
         print(f"FIRESTORE CRITICAL ERROR: {str(e)}")
