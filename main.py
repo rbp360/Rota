@@ -38,8 +38,8 @@ async def health(request: Request):
     return {
         "status": "ok",
         "role": "production-api",
-        "version": "5.5.30",
-        "msg": "Self-Healing App Ready (v5.5.30)"
+        "version": "5.5.31",
+        "msg": "Atomic PEM Reconstructor Ready (v5.5.31)"
     }
 
 @app.get("/api/test-auth")
