@@ -49,7 +49,7 @@ def health_check():
         "version": "1.9.0",
         "db": db_status,
         "staff_count": staff_count,
-        "environment": "vercel"
+        "environment": "render"
     }
 
 @app.post("/api/import-staff")
