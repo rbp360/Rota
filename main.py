@@ -162,6 +162,11 @@ def unassign_cover(absence_id: str, period: int):
     if success: return {"status": "unassigned"}
     raise HTTPException(status_code=500, detail="Unassignment failed")
 
+@app.get("/api/absences")
+def get_all_absences():
+    from backend.database_firestore import FirestoreDB
+    return FirestoreDB.get_absences()
+
 # 6. REPORTING & AI
 @app.get("/api/generate-report")
 def generate_report(query: str):
@@ -219,6 +224,13 @@ async def handle_update_staff(staff_id: str, data: dict):
     success = FirestoreDB.update_staff(staff_id, data)
     if success: return {"status": "success"}
     raise HTTPException(status_code=500, detail="Failed to update staff info")
+
+@app.delete("/api/absences/{absence_id}")
+async def handle_delete_absence(absence_id: str):
+    from backend.database_firestore import FirestoreDB
+    success = FirestoreDB.delete_absence(absence_id)
+    if success: return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Failed to delete absence")
 
 # 8. SERVE FRONTEND (Catch-all)
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")

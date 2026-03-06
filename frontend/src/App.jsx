@@ -32,6 +32,7 @@ const App = () => {
   const [managerLoading, setManagerLoading] = useState(false);
   const [managerSaving, setManagerSaving] = useState(false);
   const [managerViewMode, setManagerViewMode] = useState('periods'); // 'periods' or 'extra'
+  const [allAbsences, setAllAbsences] = useState([]);
 
   useEffect(() => {
     const today = new Date();
@@ -145,6 +146,40 @@ const App = () => {
       setCoveredPeriods(res.data.map(c => c.period));
     } catch (err) {
       console.error("Failed to fetch covers:", err);
+    }
+  };
+
+  const fetchAllAbsences = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/absences`);
+      // Sort: Newest date first
+      setAllAbsences(res.data.sort((a, b) => b.date.localeCompare(a.date)));
+    } catch (err) {
+      console.error("Failed to fetch all absences:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'tracker') {
+      fetchAllAbsences();
+    }
+  }, [activeTab]);
+
+  const handleDeleteAbsence = async (aid) => {
+    if (!window.confirm("Are you sure you want to cancel this entire absence? This will undo all cover assignments.")) return;
+    try {
+      await axios.delete(`${API_URL}/absences/${aid}`);
+      setToast({ type: 'success', message: 'Absence cancelled successfully.' });
+      fetchDailyRota();
+      fetchAllAbsences();
+      if (currentAbsenceId === aid) {
+        setCurrentAbsenceId(null);
+        setAbsentPerson("");
+        setPeriods([]);
+      }
+    } catch (err) {
+      console.error("Failed to delete absence:", err);
+      setToast({ type: 'error', message: 'Failed to cancel absence.' });
     }
   };
 
@@ -524,6 +559,7 @@ const App = () => {
 
           <button onClick={() => setActiveTab('absence')} className={activeTab === 'absence' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence</button>
           <button onClick={() => setActiveTab('rota')} className={activeTab === 'rota' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Daily Rota</button>
+          <button onClick={() => setActiveTab('tracker')} className={activeTab === 'tracker' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Absence Tracker</button>
           <button onClick={() => setActiveTab('manager')} className={activeTab === 'manager' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}>Staff Schedules</button>
           <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'btn-nav' : ''} style={{ padding: '0.4rem 0.8rem', fontSize: '0.875rem' }}><Settings size={16} /></button>
         </div>
@@ -658,18 +694,31 @@ const App = () => {
                   </button>
                 </div>
 
-                <button
-                  className="btn-primary"
-                  style={{ width: '100%', marginBottom: '0.75rem', padding: '0.6rem' }}
-                  onClick={handleSuggest}
-                  disabled={!absentPerson || periods.length === 0}
-                >
-                  {loading ? 'Analyzing...' : 'Generate AI Suggestions'}
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <button
+                    className="btn-primary"
+                    style={{ padding: '0.6rem', fontSize: '0.85rem' }}
+                    onClick={handleSuggest}
+                    disabled={!absentPerson || periods.length === 0}
+                  >
+                    {loading ? 'Analyzing...' : 'AI Suggestions'}
+                  </button>
+                  <button
+                    className="glass"
+                    style={{ padding: '0.6rem', fontSize: '0.85rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                    onClick={async () => {
+                      const aid = await ensureAbsence();
+                      if (aid) setToast({ type: 'success', message: 'Absence logged in tracker. Check Daily Rota tab.' });
+                    }}
+                    disabled={!absentPerson || periods.length === 0}
+                  >
+                    Just Log Absence
+                  </button>
+                </div>
 
                 <button
                   className="glass"
-                  style={{ width: '100%', padding: '0.6rem', fontSize: '0.875rem', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                  style={{ width: '100%', padding: '0.6rem', fontSize: '0.875rem' }}
                   onClick={() => setShowSummary(true)}
                   disabled={!absentPerson}
                 >
@@ -816,6 +865,24 @@ const App = () => {
                         <div>
                           <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{row.staff_name}</h3>
                           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Absent: Periods {row.start_period}-{row.end_period}</p>
+                          <button
+                            onClick={() => handleDeleteAbsence(row.id || row.absence_id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--danger)',
+                              fontSize: '0.75rem',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              padding: 0,
+                              marginTop: '0.5rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <AlertCircle size={14} /> Cancel this absence
+                          </button>
                         </div>
                         <span style={{
                           background: isFullyCovered ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
@@ -960,52 +1027,61 @@ const App = () => {
                           <tr key={p} style={{ background: p % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
                             <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>{getLabel(p)}</td>
                             {days.map(d => {
-                              const item = managerSchedule.find(s => s.day_of_week === d && s.period === p);
-                              const isFree = item?.is_free || false;
-                              const hasActivity = item?.activity && item.activity.trim() !== "";
-
                               return (
                                 <td key={d} style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', minWidth: '180px' }}>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <input
-                                      type="text"
-                                      key={`${managerStaff.id}_${d}_${p}_${item?.activity}`}
-                                      defaultValue={item?.activity || ''}
-                                      onBlur={(e) => {
-                                        if (e.target.value !== (item?.activity || '')) {
-                                          handleUpdateSchedule(d, p, e.target.value, isFree);
-                                        }
-                                      }}
-                                      placeholder="Activity name..."
-                                      style={{
-                                        padding: '0.5rem',
-                                        borderRadius: '0.5rem',
-                                        border: !hasActivity ? '1px solid #fbbf24' : '1px solid var(--border)',
-                                        fontSize: '0.875rem',
-                                        background: !hasActivity ? 'rgba(251, 191, 36, 0.15)' : (isFree ? 'rgba(16, 185, 129, 0.05)' : 'white'),
-                                        transition: 'all 0.3s ease'
-                                      }}
-                                    />
-                                    <button
-                                      onClick={() => handleUpdateSchedule(d, p, item?.activity || '', !isFree)}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        padding: '4px 8px',
-                                        borderRadius: '4px',
-                                        border: 'none',
-                                        background: isFree ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
-                                        color: isFree ? 'white' : 'var(--text-muted)',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '700',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                      }}
-                                    >
-                                      {isFree ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                                      {isFree ? 'AVAILABLE FOR COVER' : 'BUSY / TEACHING'}
-                                    </button>
+                                    {(() => {
+                                      const item = managerSchedule.find(s => s.day_of_week === d && s.period === p);
+                                      const isExtra = managerViewMode === 'extra';
+                                      // Default logic: Periods 1-8 are BUSY by default. Duties/CCA are FREE by default.
+                                      const isFree = item ? item.is_free : (isExtra ? true : false);
+                                      const hasActivity = item?.activity && item.activity.trim() !== "";
+                                      const placeholderText = isExtra ? "Available (No Duty)" : "Activity name...";
+
+                                      return (
+                                        <>
+                                          <input
+                                            type="text"
+                                            key={`${managerStaff.id}_${d}_${p}_${item?.activity}`}
+                                            defaultValue={item?.activity || ''}
+                                            onBlur={(e) => {
+                                              if (e.target.value !== (item?.activity || '')) {
+                                                handleUpdateSchedule(d, p, e.target.value, isFree);
+                                              }
+                                            }}
+                                            placeholder={placeholderText}
+                                            style={{
+                                              padding: '0.5rem',
+                                              borderRadius: '0.5rem',
+                                              border: !hasActivity ? '1px solid #fbbf24' : '1px solid var(--border)',
+                                              fontSize: '0.875rem',
+                                              background: !hasActivity ? 'rgba(251, 191, 36, 0.15)' : (isFree ? 'rgba(16, 185, 129, 0.05)' : 'white'),
+                                              transition: 'all 0.3s ease'
+                                            }}
+                                          />
+                                          <button
+                                            onClick={() => handleUpdateSchedule(d, p, item?.activity || '', !isFree)}
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              padding: '4px 8px',
+                                              borderRadius: '4px',
+                                              border: 'none',
+                                              background: isFree ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
+                                              color: isFree ? 'white' : 'var(--text-muted)',
+                                              fontSize: '0.75rem',
+                                              fontWeight: '700',
+                                              cursor: 'pointer',
+                                              transition: 'all 0.2s ease'
+                                            }}
+                                          >
+                                            {isFree ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                                            {isFree ? 'AVAILABLE FOR COVER' : 'BUSY / TEACHING'}
+                                          </button>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </td>
                               );
@@ -1030,6 +1106,77 @@ const App = () => {
                 <Save size={16} /> Saving changes...
               </div>
             )}
+          </motion.div>
+        )}
+        {activeTab === 'tracker' && (
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="glass" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+              <div>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--primary)', margin: 0 }}>
+                  <ShieldCheck size={28} /> Absence Tracker
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Master list of all recorded absences</p>
+              </div>
+              <button className="btn-primary" onClick={fetchAllAbsences} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <RotateCcw size={18} /> Refresh List
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {allAbsences.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '5rem', background: 'rgba(0,0,0,0.02)', borderRadius: '1rem' }}>
+                  <p>No absences found in database.</p>
+                </div>
+              ) : (
+                allAbsences.map(abs => {
+                  const dateObj = new Date(abs.date);
+                  const isToday = dateObj.toDateString() === new Date().toDateString();
+                  const coversCount = abs.covers?.length || 0;
+                  const totalPeriods = abs.end_period - abs.start_period + 1;
+
+                  return (
+                    <div key={abs.id} className="glass" style={{
+                      padding: '1.25rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderLeft: `5px solid ${isToday ? 'var(--primary)' : 'var(--border)'}`
+                    }}>
+                      <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+                        <div style={{ minWidth: '100px' }}>
+                          <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{abs.date}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isToday ? 'Today' : 'Past/Future'}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>{abs.staff_name}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Periods {abs.start_period}-{abs.end_period}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <span style={{
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '1rem',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            background: coversCount >= totalPeriods ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            color: coversCount >= totalPeriods ? 'var(--accent)' : 'var(--danger)',
+                            border: `1px solid currentColor`
+                          }}>
+                            {coversCount}/{totalPeriods} COVERED
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAbsence(abs.id)}
+                        className="btn-danger"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '0.5rem' }}
+                      >
+                        Cancel Absence
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </motion.div>
         )}
       </main>

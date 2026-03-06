@@ -9,17 +9,45 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure Google AI Studio API Key
-API_KEY = os.getenv("GOOGLE_AI_KEY")
-if API_KEY and HAS_GENAI:
-    genai.configure(api_key=API_KEY)
+# Global config helper
+def configure_genai():
+    if not HAS_GENAI:
+        return False
+    
+    api_key = os.getenv("GOOGLE_AI_KEY")
+    if api_key:
+        try:
+            genai.configure(api_key=api_key)
+            return True
+        except:
+            return False
+    return False
 
 class RotaAI:
     def __init__(self):
-        if HAS_GENAI:
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
-        else:
-            self.model = None
+        self.model = None
+        self._initialized = False
+
+    def _ensure_model(self):
+        """Lazy initialization of the Gemini model."""
+        if self._initialized:
+            return self.model
+            
+        if HAS_GENAI and configure_genai():
+            try:
+                # Update: Use gemini-1.5-flash-latest for maximum free-tier compatibility.
+                self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                print("AI: Initialized with gemini-1.5-flash-latest")
+            except Exception as e:
+                print(f"AI: Primary model failed: {e}")
+                try:
+                    self.model = genai.GenerativeModel('gemini-flash-latest')
+                    print("AI: Falling back to gemini-flash-latest")
+                except:
+                    self.model = None
+        
+        self._initialized = True
+        return self.model
 
     def suggest_cover(self, absent_staff, day, periods, available_staff_profiles):
         if not HAS_GENAI:
@@ -53,12 +81,26 @@ class RotaAI:
         Output format: Concise text explaining the selection per period.
         """
         
+        model = self._ensure_model()
+        if not model:
+            return "Error: AI model failed to initialize."
+            
         try:
-            response = self.model.generate_content(prompt)
+            response = model.generate_content(prompt)
             return response.text
+
         except Exception as e:
-            print(f"AI Generation Error: {e}")
-            return f"Error: Failed to generate AI content. {str(e)}"
+            error_str = str(e)
+            print(f"AI Generation Error: {error_str}")
+            if "404" in error_str or "not found" in error_str.lower():
+                print("Attempting fallback to gemini-pro-latest...")
+                try:
+                    fallback_model = genai.GenerativeModel('gemini-pro-latest')
+                    response = fallback_model.generate_content(prompt)
+                    return response.text + "\n\n(Note: Generated using fallback model)"
+                except Exception as fallback_e:
+                    return f"Error: Both primary and fallback models failed. {str(fallback_e)}"
+            return f"Error: Failed to generate AI content. {error_str}"
 
     def generate_report(self, query, data_context):
         if not HAS_GENAI:
@@ -82,9 +124,22 @@ class RotaAI:
         Output format: Concise, professional text or a small table if appropriate.
         """
         
+        model = self._ensure_model()
+        if not model:
+            return "Error: AI model failed to initialize."
+
         try:
-            response = self.model.generate_content(prompt)
+            response = model.generate_content(prompt)
             return response.text
         except Exception as e:
-            print(f"AI Report Generation Error: {e}")
-            return f"Error: Failed to generate report. {str(e)}"
+            error_str = str(e)
+            print(f"AI Report Generation Error: {error_str}")
+            if "404" in error_str or "not found" in error_str.lower():
+                print("Attempting fallback to gemini-pro-latest...")
+                try:
+                    fallback_model = genai.GenerativeModel('gemini-pro-latest')
+                    response = fallback_model.generate_content(prompt)
+                    return response.text + "\n\n(Note: Generated using fallback model)"
+                except Exception as fallback_e:
+                    return f"Error: Both primary and fallback models failed. {str(fallback_e)}"
+            return f"Error: Failed to generate report. {error_str}"

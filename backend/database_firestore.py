@@ -1,8 +1,6 @@
-from google.cloud import firestore
-from google.oauth2 import service_account
 import os
-import json
 import re
+import json
 
 # Global variables
 _db = None
@@ -172,6 +170,20 @@ class FirestoreDB:
                     "period": p,
                     "staff_name": staff_name
                 })
+            return True
+        except: return False
+
+    @staticmethod
+    def delete_absence(absence_id):
+        database = get_db()
+        if not database: return False
+        try:
+            # Delete covers first
+            covers = database.collection("absences").document(absence_id).collection("covers").stream()
+            for c in covers:
+                c.reference.delete()
+            # Delete the absence itself
+            database.collection("absences").document(absence_id).delete()
             return True
         except: return False
 
