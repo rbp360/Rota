@@ -199,6 +199,9 @@ def normalize_data():
                     
                     if not clean_val or clean_val in free_keywords:
                         is_available = True
+                    elif "assembly" in val.lower():
+                        # Assembly is a free period for cover eligibility
+                        is_available = True
                     elif not is_spec and is_specialist_lesson:
                         # If NOT a specialist teacher, but doing a specialist subject, they are free!
                         is_available = True
