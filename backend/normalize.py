@@ -18,17 +18,19 @@ def clean_staff_name(name):
     if not name: return ""
     n = str(name).strip()
     
-    # GLOBAL IGNORE LIST
+    # GLOBAL IGNORE LIST - Things that are definitely NOT staff
     IGNORED = [
         "TBC", "External", "Coach", "Room", "Music Room", "Hall",
         "Gym", "Pitch", "Court", "Pool", "Library", "PRE NURSERY", "PRE NUSERY", "Outside Prov.",
-        "**", "gate", "locked", "at", "8.30", "Mr", "1", "Calire", "?"
+        "**", "gate", "locked", "at", "8.30", "1", "Calire", "?"
     ]
-    if any(i.lower() in n.lower() for i in IGNORED):
+    # We check if the name is JUST an ignored string, or if it's one of the non-person identifiers
+    if n.lower() in [i.lower() for i in IGNORED]:
         return None
 
-    # Remove "K.", "Kun ", "K " prefixes
-    n = re.sub(r'^(k\.|kun\s|k\s)', '', n, flags=re.IGNORECASE).strip()
+    # Remove title prefixes like "Mr", "Mrs", "Ms", "Miss", "K.", "Kun ", "K "
+    n = re.sub(r'^(mr|mrs|ms|miss|k\.|kun\s|k\s)\s*', '', n, flags=re.IGNORECASE).strip()
+    
     # Remove brackets and content e.g. "Charlotte (Thu)" -> "Charlotte"
     n = n.split('(')[0].strip()
     
@@ -38,12 +40,14 @@ def clean_staff_name(name):
     # Fix Typos / Combine Duplicates
     if "jactina" in nl: return "Jacinta"
     if "nokkeaw" in nl: return "Nokkaew"
-    if "nick" in nl and ("c" in nl or nl == "nick"): return "Nick C" # Matches "Nick C", "Nick. C", "Nick"
+    if "nick" in nl and ("c" in nl or nl == "nick"): return "Nick C"
     
     if nl == "darryl": return "Daryl"
-    if nl == "ginny": return "Jinny"
-    if nl == "jinny": return "Jinny" 
+    if "jinny" in nl or "ginny" in nl: return "Jinny"
     if nl == "janel": return "Janel"
+    
+    # Final check: if it's still just "Mr" or something, ignore
+    if len(n) < 2: return None
     
     return n
 
@@ -157,14 +161,19 @@ def normalize_data():
             p_rows_map = {}
             for r_idx, row in enumerate(sheet.iter_rows(max_row=60, values_only=True)):
                 # Check first 5 columns for period markers
-                markers = [str(v).strip().lower() for v in row[:5] if v is not None]
-                for p_num in range(1, 9):
-                    if p_num in p_rows_map: continue
-                    # Common markers: "1", "P1", "Period 1", "P.1"
-                    possible = [str(p_num), f"p{p_num}", f"period {p_num}", f"p.{p_num}", f"per {p_num}"]
-                    if any(m in markers for m in possible):
-                        p_rows_map[p_num] = row
-                        break
+                for c_idx, val in enumerate(row[:5]):
+                    if val is None: continue
+                    val_str = str(val).strip().lower()
+                    
+                    for p_num in range(1, 9):
+                        if p_num in p_rows_map: continue
+                        
+                        # Use Regex to find standalone period number, or P1, or Period 1
+                        # This matches "1", "P1", "Period 1", "P.1", "1 (8:30)", "Period 1 (8:30)"
+                        pattern = rf'(^|\b)(period\s*|p\.?\s*|){p_num}(\b|$)'
+                        if re.search(pattern, val_str):
+                            p_rows_map[p_num] = row
+                            break
             
             for p_num in range(1, 9):
                 row_data = p_rows_map.get(p_num)
