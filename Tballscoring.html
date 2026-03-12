@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-Ball Pro Scorer</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f7f6; padding: 10px; color: #333; }
+        .tabs { display: flex; overflow-x: auto; gap: 8px; margin-bottom: 15px; padding-bottom: 5px; }
+        .tab { padding: 12px 20px; background: #fff; border: 1px solid #ddd; border-radius: 25px; cursor: pointer; white-space: nowrap; font-weight: bold; }
+        .tab.active { background: #28a745; color: white; border-color: #28a745; }
+        .section { display: none; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .section.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #eee; padding: 12px 8px; text-align: center; }
+        th { background: #f8f9fa; font-size: 0.8em; text-transform: uppercase; }
+        .fixture-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+        .fixture-row input { width: 45px; height: 35px; border: 2px solid #ddd; border-radius: 6px; text-align: center; font-size: 16px; margin: 0 5px; }
+        .team-label { flex: 1; font-weight: 500; font-size: 14px; }
+        .tie-warning { background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; margin-top: 10px; border: 1px solid #ffeeba; display: none; font-weight: bold; }
+        .tie-row { background-color: #fff9e6 !important; }
+        .rank-cell { font-weight: bold; width: 30px; }
+    </style>
+</head>
+<body>
+
+    <h2 style="text-align:center">⚾ T-Ball Tournament Manager</h2>
+    
+    <div class="tabs">
+        <div class="tab active" onclick="showDiv('u9a', this)">U9 A</div>
+        <div class="tab" onclick="showDiv('u9bc', this)">U9 B&C</div>
+        <div class="tab" onclick="showDiv('u11a', this)">U11 A</div>
+        <div class="tab" onclick="showDiv('u11bcd', this)">U11 B-D</div>
+    </div>
+
+    <div id="u9a" class="section active">
+        <h3>U9 Division A (Pitch 1)</h3>
+        <div id="fixtures-u9a"></div>
+        <div id="tie-u9a" class="tie-warning">⚠️ Tie: 5-Batter Replay Needed</div>
+        <table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>RF</th><th>RA</th></tr></thead><tbody id="table-u9a"></tbody></table>
+    </div>
+
+    <div id="u9bc" class="section"><h3>U9 Division B & C (Pitch 2)</h3><div id="fixtures-u9bc"></div><div id="tie-u9bc" class="tie-warning">⚠️ Tie: 5-Batter Replay Needed</div><table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>RF</th><th>RA</th></tr></thead><tbody id="table-u9bc"></tbody></table></div>
+    <div id="u11a" class="section"><h3>U11 Division A (Pitch 5)</h3><div id="fixtures-u11a"></div><div id="tie-u11a" class="tie-warning">⚠️ Tie: 5-Batter Replay Needed</div><table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>RF</th><th>RA</th></tr></thead><tbody id="table-u11a"></tbody></table></div>
+    <div id="u11bcd" class="section"><h3>U11 Division B, C, D (Pitch 3 & 4)</h3><div id="fixtures-u11bcd"></div><div id="tie-u11bcd" class="tie-warning">⚠️ Tie: 5-Batter Replay Needed</div><table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>RF</th><th>RA</th></tr></thead><tbody id="table-u11bcd"></tbody></table></div>
+
+<script>
+    const data = {
+        u9a: { teams: ["U9 Green Valley (A)", "U9 S107 (A)", "U9 Dusit (A)", "U9 Sathorn (A)"], fixtures: [{t1:"U9 Green Valley (A)",t2:"U9 S107 (A)"},{t1:"U9 S107 (A)",t2:"U9 Dusit (A)"},{t1:"U9 Green Valley (A)",t2:"U9 Sathorn (A)"},{t1:"U9 Sathorn (A)",t2:"U9 S107 (A)"},{t1:"U9 Green Valley (A)",t2:"U9 Dusit (A)"},{t1:"U9 Dusit (A)",t2:"U9 Sathorn (A)"}]},
+        u9bc: { teams: ["U9 Green Valley (B)", "U9 S107 (B)", "U9 S107 (C)", "U9 Sathorn (B)"], fixtures: [{t1:"U9 Green Valley (B)",t2:"U9 S107 (B)"},{t1:"U9 S107 (B)",t2:"U9 S107 (C)"},{t1:"U9 Green Valley (B)",t2:"U9 Sathorn (B)"},{t1:"U9 Sathorn (B)",t2:"U9 S107 (B)"},{t1:"U9 Green Valley (B)",t2:"U9 S107 (C)"},{t1:"U9 S107 (C)",t2:"U9 Sathorn (B)"}]},
+        u11a: { teams: ["U11 Green Valley (A)", "U11 S107 (A)", "U11 Dusit (A)", "U11 Sathorn (A)"], fixtures: [{t1:"U11 Green Valley (A)",t2:"U11 S107 (A)"},{t1:"U11 S107 (A)",t2:"U11 Dusit (A)"},{t1:"U11 Green Valley (A)",t2:"U11 Sathorn (A)"},{t1:"U11 Sathorn (A)",t2:"U11 S107 (A)"},{t1:"U11 Green Valley (A)",t2:"U11 Dusit (A)"},{t1:"U11 Dusit (A)",t2:"U11 Sathorn (A)"}]},
+        u11bcd: { teams: ["U11 Green Valley (B)", "U11 Green Valley (C)", "U11 S107 (B)", "U11 S107 (C)", "U11 S107 (D)", "U11 Dusit (B)", "U11 Sathorn (B)"], fixtures: [{t1:"U11 S107 (B)",t2:"U11 S107 (C)"},{t1:"U11 Green Valley (B)",t2:"U11 Green Valley (C)"},{t1:"U11 Green Valley (C)",t2:"U11 S107 (C)"},{t1:"U11 S107 (B)",t2:"U11 Dusit (B)"},{t1:"U11 Green Valley (C)",t2:"U11 Dusit (B)"},{t1:"U11 Green Valley (B)",t2:"U11 S107 (D)"},{t1:"U11 Dusit (B)",t2:"U11 Sathorn (B)"},{t1:"U11 S107 (B)",t2:"U11 S107 (D)"},{t1:"U11 S107 (C)",t2:"U11 Sathorn (B)"},{t1:"U11 Green Valley (B)",t2:"U11 Sathorn (B)"},{t1:"U11 Green Valley (C)",t2:"U11 S107 (B)"},{t1:"U11 S107 (D)",t2:"U11 Sathorn (B)"},{t1:"U11 S107 (C)",t2:"U11 Dusit (B)"},{t1:"U11 S107 (D)",t2:"U11 Dusit (B)"},{t1:"U11 Green Valley (B)",t2:"U11 S107 (C)"},{t1:"U11 S107 (B)",t2:"U11 Sathorn (B)"},{t1:"U11 Green Valley (B)",t2:"U11 Dusit (B)"},{t1:"U11 S107 (C)",t2:"U11 S107 (D)"},{t1:"U11 Green Valley (C)",t2:"U11 Sathorn (B)"},{t1:"U11 Green Valley (C)",t2:"U11 S107 (D)"},{t1:"U11 Green Valley (B)",t2:"U11 S107 (B)"}]}
+    };
+
+    function showDiv(id, el) {
+        document.querySelectorAll('.section, .tab').forEach(item => item.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        el.classList.add('active');
+    }
+
+    function init() {
+        for (let divId in data) {
+            const container = document.getElementById(`fixtures-${divId}`);
+            data[divId].fixtures.forEach((f, idx) => {
+                const row = document.createElement('div');
+                row.className = 'fixture-row';
+                row.innerHTML = `<span class="team-label">${f.t1}</span><input type="number" id="s1-${divId}-${idx}" oninput="updateTable('${divId}')"> vs <input type="number" id="s2-${divId}-${idx}" oninput="updateTable('${divId}')"><span class="team-label" style="text-align:right">${f.t2}</span>`;
+                container.appendChild(row);
+            });
+            updateTable(divId);
+        }
+    }
+
+    function updateTable(divId) {
+        const stats = {};
+        data[divId].teams.forEach(t => stats[t] = { name: t, pts: 0, rf: 0, ra: 0, h2h: {} });
+
+        data[divId].fixtures.forEach((f, idx) => {
+            const s1 = parseInt(document.getElementById(`s1-${divId}-${idx}`).value);
+            const s2 = parseInt(document.getElementById(`s2-${divId}-${idx}`).value);
+            if (!isNaN(s1) && !isNaN(s2)) {
+                stats[f.t1].rf += s1; stats[f.t1].ra += s2;
+                stats[f.t2].rf += s2; stats[f.t2].ra += s1;
+                if (s1 > s2) { stats[f.t1].pts += 4; stats[f.t2].pts += 1; stats[f.t1].h2h[f.t2] = 1; stats[f.t2].h2h[f.t1] = -1; }
+                else if (s2 > s1) { stats[f.t2].pts += 4; stats[f.t1].pts += 1; stats[f.t2].h2h[f.t1] = 1; stats[f.t1].h2h[f.t2] = -1; }
+                else { stats[f.t1].pts += 2; stats[f.t2].pts += 2; stats[f.t1].h2h[f.t2] = 0; stats[f.t2].h2h[f.t1] = 0; }
+            }
+        });
+
+        const sorted = Object.values(stats).sort((a, b) => {
+            if (b.pts !== a.pts) return b.pts - a.pts;
+            if (a.h2h[b.name] !== undefined && a.h2h[b.name] !== 0) return b.h2h[a.name] - a.h2h[b.name];
+            if (b.rf !== a.rf) return b.rf - a.rf;
+            return a.ra - b.ra;
+        });
+
+        const tbody = document.getElementById(`table-${divId}`);
+        const tieBox = document.getElementById(`tie-${divId}`);
+        tbody.innerHTML = "";
+        let hasDeadTie = false;
+
+        sorted.forEach((team, i) => {
+            let isTied = false;
+            if (i > 0) {
+                const prev = sorted[i-1];
+                if (team.pts === prev.pts && team.rf === prev.rf && team.ra === prev.ra && (team.h2h[prev.name] === 0 || team.h2h[prev.name] === undefined)) {
+                    isTied = true;
+                    hasDeadTie = true;
+                }
+            }
+            if (i < sorted.length - 1) {
+                const next = sorted[i+1];
+                if (team.pts === next.pts && team.rf === next.rf && team.ra === next.ra && (team.h2h[next.name] === 0 || team.h2h[next.name] === undefined)) {
+                    isTied = true;
+                    hasDeadTie = true;
+                }
+            }
+
+            const row = ` <tr class="${isTied ? 'tie-row' : ''}">
+                <td class="rank-cell">${isTied ? '=' : i + 1}</td>
+                <td style="text-align:left">${team.name}</td>
+                <td>${team.pts}</td><td>${team.rf}</td><td>${team.ra}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+
+        tieBox.style.display = hasDeadTie ? "block" : "none";
+    }
+
+    init();
+</script>
+</body>
+</html>
